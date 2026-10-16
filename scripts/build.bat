@@ -71,33 +71,9 @@ copy /Y "%ROOT_DIR%dist\doc-ai-gateway.exe" "%PKG_DIR%\" >nul
 :: Copy config
 copy /Y "%ROOT_DIR%cfg.yml" "%PKG_DIR%\" >nul 2>&1
 
-:: Create README
-echo   Creating README...
-(
-    echo DocAI Gateway - Doc AI Gateway
-    echo ====================================
-    echo.
-    echo Quick start:
-    echo   1. Double-click doc-ai-gateway.exe to start the service
-    echo   2. Open browser and visit http://localhost:8080
-    echo   3. Login with default account admin/admin
-    echo.
-    echo NOTE: admin must change the password on first login.
-    echo The initial password expires if not changed within 2 hours.
-    echo Runtime logs are in logs\ directory, rotated hourly, kept 7 days.
-    echo.
-    echo Directories:
-    echo   doc-ai-gateway.exe  Main program
-    echo   cfg.yml             Config file
-    echo   data\               File storage directory
-    echo.
-    echo External APIs:
-    echo   POST /api/files/upload       Upload file
-    echo   GET  /api/files/status/:id   Query file status
-    echo   POST /api/ai/call            Call AI interface
-    echo.
-    echo Admin console: http://localhost:8080/admin
-) > "%PKG_DIR%\README.txt"
+:: Copy Chinese README (separate file avoids encoding issues in batch)
+echo   Copying README...
+copy /Y "%ROOT_DIR%scripts\windows-readme.txt" "%PKG_DIR%\README.txt" >nul
 
 :: Package as zip
 set "ZIP_NAME=%ROOT_DIR%dist\doc-ai-gateway-windows-amd64.zip"
