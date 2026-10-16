@@ -118,68 +118,64 @@ ensure_go_tarball() {
 }
 
 # ================================================================
-# build_windows — 本地交叉编译 Windows .exe
+# build_windows — 本地交叉编译 Windows .exe + 打包 zip
 # ================================================================
 build_windows() {
     echo "=== Building doc-ai-gateway.exe (Windows amd64) ==="
-    mkdir -p dist
+    rm -rf dist/doc-ai-gateway.exe dist/doc-ai-gateway-windows-amd64*
 
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
         go build -mod=mod -ldflags="-s -w -H windowsgui" -o dist/doc-ai-gateway.exe .
 
     echo "  dist/doc-ai-gateway.exe ($(du -h dist/doc-ai-gateway.exe | cut -f1))"
 
+    # 打包目录
     local pkg="dist/doc-ai-gateway-windows-amd64"
     rm -rf "$pkg" && mkdir -p "$pkg"
 
     cp dist/doc-ai-gateway.exe "$pkg/"
-    if [[ -f cfg.yml ]]; then
-        cp cfg.yml "$pkg/"
-    else
-        cp cfg.yml.template "$pkg/cfg.yml"
-    fi
+    cp cfg.yml.template "$pkg/cfg.yml"
+    cp scripts/windows-readme.txt "$pkg/README.txt"
 
-    cat > "$pkg/README.txt" << 'EOF'
-DocAI Gateway - 文档 AI 智能网关
-====================================
+    # 打包 zip
+    cd dist && rm -f doc-ai-gateway-windows-amd64.zip && \
+        zip -rq "doc-ai-gateway-windows-amd64.zip" "doc-ai-gateway-windows-amd64"
+    cd "$SCRIPT_DIR"
 
-快速开始:
-  1. 双击 doc-ai-gateway.exe 启动服务
-  2. 打开浏览器访问 http://localhost:8080
-  3. 使用默认账号 admin/admin 登录
-
-注意:
-  admin 首次登录必须修改密码，2小时内未修改则初始密码作废
-  程序运行日志见 logs/ 目录，按小时滚动，保留7天
-
-目录说明:
-  doc-ai-gateway.exe  主程序
-  cfg.yml             配置文件
-  data\                文件存储目录 (自动创建)
-
-对外接口:
-  POST /api/files/upload       上传文件
-  GET  /api/files/status/:id   查询文件状态
-  POST /api/ai/call            调用 AI 接口
-
-管理后台: http://localhost:8080/admin
-EOF
-
-    cd dist && zip -rq "doc-ai-gateway-windows-amd64.zip" "doc-ai-gateway-windows-amd64"
-    rm -rf "doc-ai-gateway-windows-amd64"
     echo "  dist/doc-ai-gateway-windows-amd64.zip ($(du -h dist/doc-ai-gateway-windows-amd64.zip | cut -f1))"
+
+    # 清理中间文件
+    rm -rf "$pkg" dist/doc-ai-gateway.exe
     echo "=== Done ==="
 }
 
 # ================================================================
-# build_linux_local — 本地 Go 编译 Linux 二进制
+# build_linux_local — 本地 Go 编译 Linux 二进制 + 打包 tar
 # ================================================================
 build_linux_local() {
     echo "=== Building doc-ai-gateway (Linux amd64, local Go) ==="
-    mkdir -p dist
+    rm -rf dist/doc-ai-gateway dist/doc-ai-gateway-linux-amd64*
+
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
         go build -mod=mod -ldflags="-s -w" -o dist/doc-ai-gateway .
+
     echo "  dist/doc-ai-gateway ($(du -h dist/doc-ai-gateway | cut -f1))"
+
+    # 打包目录
+    local pkg="dist/doc-ai-gateway-linux-amd64"
+    rm -rf "$pkg" && mkdir -p "$pkg"
+
+    cp dist/doc-ai-gateway "$pkg/"
+    cp cfg.yml.template "$pkg/cfg.yml"
+    cp scripts/windows-readme.txt "$pkg/README.txt"
+
+    # 打包 tar
+    tar -cf "dist/doc-ai-gateway-linux-amd64.tar" -C dist "doc-ai-gateway-linux-amd64"
+
+    echo "  dist/doc-ai-gateway-linux-amd64.tar ($(du -h dist/doc-ai-gateway-linux-amd64.tar | cut -f1))"
+
+    # 清理中间文件
+    rm -rf "$pkg" dist/doc-ai-gateway
     echo "=== Done ==="
 }
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -9,13 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Load 从 YAML 文件加载配置
+// Load 从 YAML 文件加载配置；文件不存在时使用默认配置
 func Load(path string) (*model.Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("读取配置文件失败: %w", err)
-	}
-
 	cfg := &model.Config{
 		Server: model.ServerConfig{
 			Port: 8080,
@@ -24,6 +20,15 @@ func Load(path string) (*model.Config, error) {
 			Name:     "DocAI Gateway",
 			BasePath: "data",
 		},
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// 配置文件缺失，使用默认配置
+			return cfg, nil
+		}
+		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {

@@ -68,8 +68,8 @@ mkdir "%PKG_DIR%"
 :: Copy exe
 copy /Y "%ROOT_DIR%dist\doc-ai-gateway.exe" "%PKG_DIR%\" >nul
 
-:: Copy config
-copy /Y "%ROOT_DIR%cfg.yml" "%PKG_DIR%\" >nul 2>&1
+:: Copy config (always use template to avoid secrets leaking)
+copy /Y "%ROOT_DIR%cfg.yml.template" "%PKG_DIR%\cfg.yml" >nul
 
 :: Copy Chinese README (separate file avoids encoding issues in batch)
 echo   Copying README...
