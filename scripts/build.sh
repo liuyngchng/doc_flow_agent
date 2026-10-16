@@ -30,7 +30,7 @@ usage() {
   (默认)                  编译 Linux 二进制 (Docker)
   local                   编译 Linux 二进制 (本地 Go)
   windows                 交叉编译 Windows .exe (本地 Go)
-  docker                  构建 Docker 生产镜像
+  docker                  构建 Docker 生产镜像 (需先有 dist/doc-ai-gateway)
   -h | --help             显示本帮助并退出
 
 代理参数（可选，不带 = 时继承环境变量）:
@@ -44,7 +44,7 @@ usage() {
 EOF
 }
 
-# ── 参数解析：第一个非代理参数作为模式，其余解析代理 ──────────────
+# ── 参数解析 ────────────────────────────────────────────────────
 MODE=""
 HTTP_PROXY_VAL=""
 HTTPS_PROXY_VAL=""
@@ -71,12 +71,10 @@ HTTP_PROXY_VAL="${HTTP_PROXY_VAL:-${HTTP_PROXY:-${http_proxy:-}}}"
 HTTPS_PROXY_VAL="${HTTPS_PROXY_VAL:-${HTTPS_PROXY:-${https_proxy:-}}}"
 NO_PROXY_VAL="${NO_PROXY_VAL:-${NO_PROXY:-${no_proxy:-}}}"
 
-# 自动补全 scheme（如 127.0.0.1:7890 -> http://127.0.0.1:7890）
 add_scheme() { local v="$1"; [[ -z "$v" || "$v" == *"://"* ]] && { printf '%s' "$v"; return; }; printf 'http://%s' "$v"; }
 HTTP_PROXY_VAL="$(add_scheme "$HTTP_PROXY_VAL")"
 HTTPS_PROXY_VAL="$(add_scheme "$HTTPS_PROXY_VAL")"
 
-# ── 统一导出代理环境变量（本地 go build 会读取） ─────────────────
 if [[ -n "$HTTP_PROXY_VAL" || -n "$HTTPS_PROXY_VAL" ]]; then
   export HTTP_PROXY="$HTTP_PROXY_VAL" HTTPS_PROXY="$HTTPS_PROXY_VAL"
   export http_proxy="$HTTP_PROXY_VAL" https_proxy="$HTTPS_PROXY_VAL"
@@ -84,15 +82,44 @@ if [[ -n "$HTTP_PROXY_VAL" || -n "$HTTPS_PROXY_VAL" ]]; then
   echo "代理: http=$HTTP_PROXY_VAL https=$HTTPS_PROXY_VAL no_proxy=$NO_PROXY_VAL"
 fi
 
-# ── Docker 运行时代理 env（供 docker run 传 -e） ─────────────────
+# ── Docker build arg / run env ───────────────────────────────────
+DOCKER_BUILD_ARGS=()
 DOCKER_RUN_ENV=()
 if [[ -n "$HTTP_PROXY_VAL" || -n "$HTTPS_PROXY_VAL" ]]; then
+  DOCKER_BUILD_ARGS=(--build-arg "HTTP_PROXY=$HTTP_PROXY_VAL" --build-arg "HTTPS_PROXY=$HTTPS_PROXY_VAL" --build-arg "NO_PROXY=$NO_PROXY_VAL")
   DOCKER_RUN_ENV=(
     -e "HTTP_PROXY=$HTTP_PROXY_VAL" -e "HTTPS_PROXY=$HTTPS_PROXY_VAL" -e "NO_PROXY=$NO_PROXY_VAL"
     -e "http_proxy=$HTTP_PROXY_VAL" -e "https_proxy=$HTTPS_PROXY_VAL" -e "no_proxy=$NO_PROXY_VAL"
   )
 fi
 
+# ================================================================
+# Go toolchain (host-cached tarball, used by all Docker builds)
+# ================================================================
+GO_VERSION="1.24.13"
+GO_TARBALL="$SCRIPT_DIR/build/deps/go${GO_VERSION}.linux-amd64.tar.gz"
+GO_DOWNLOAD_URL="https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+
+ensure_go_tarball() {
+  if [[ -f "$GO_TARBALL" ]]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$GO_TARBALL")"
+  echo "Downloading Go ${GO_VERSION} toolchain ..."
+  if command -v curl &>/dev/null; then
+    curl -fL --retry 3 -o "$GO_TARBALL" "$GO_DOWNLOAD_URL"
+  elif command -v wget &>/dev/null; then
+    wget -O "$GO_TARBALL" "$GO_DOWNLOAD_URL"
+  else
+    echo "ERROR: 需要 curl 或 wget 下载 Go toolchain"
+    exit 1
+  fi
+  echo "Go toolchain saved to $GO_TARBALL"
+}
+
+# ================================================================
+# build_windows — 本地交叉编译 Windows .exe
+# ================================================================
 build_windows() {
     echo "=== Building doc-ai-gateway.exe (Windows amd64) ==="
     mkdir -p dist
@@ -102,7 +129,6 @@ build_windows() {
 
     echo "  dist/doc-ai-gateway.exe ($(du -h dist/doc-ai-gateway.exe | cut -f1))"
 
-    # 打包发行版
     local pkg="dist/doc-ai-gateway-windows-amd64"
     rm -rf "$pkg" && mkdir -p "$pkg"
 
@@ -113,7 +139,6 @@ build_windows() {
         cp cfg.yml.template "$pkg/cfg.yml"
     fi
 
-    # 创建 README
     cat > "$pkg/README.txt" << 'EOF'
 DocAI Gateway - 文档 AI 智能网关
 ====================================
@@ -146,6 +171,9 @@ EOF
     echo "=== Done ==="
 }
 
+# ================================================================
+# build_linux_local — 本地 Go 编译 Linux 二进制
+# ================================================================
 build_linux_local() {
     echo "=== Building doc-ai-gateway (Linux amd64, local Go) ==="
     mkdir -p dist
@@ -155,11 +183,18 @@ build_linux_local() {
     echo "=== Done ==="
 }
 
+# ================================================================
+# build_linux_docker — Docker 编译 Linux 二进制 + 生产镜像
+# ================================================================
 build_linux_docker() {
+    ensure_go_tarball
+
     # 构建编译镜像
     if ! docker image inspect "$IMAGE" &>/dev/null; then
         echo "=== Building build image $IMAGE ==="
-        docker build -t "$IMAGE" -f scripts/Dockerfile .
+        docker build "${DOCKER_BUILD_ARGS[@]+"${DOCKER_BUILD_ARGS[@]}"}" \
+            --build-arg "GO_VERSION=$GO_VERSION" \
+            -t "$IMAGE" -f scripts/Dockerfile .
         echo "Done."
     fi
 
@@ -190,7 +225,7 @@ build_linux_docker() {
 
     # 构建生产镜像
     echo ""
-    echo "=== Building production Docker image ==="
+    echo "=== Building production Docker image doc-ai-gateway:latest ==="
     docker build -t doc-ai-gateway:latest -f scripts/Dockerfile.server .
 
     echo ""

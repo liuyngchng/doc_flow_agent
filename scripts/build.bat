@@ -1,9 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
+chcp 65001 >nul
 
 :: ================================================================
-:: build.bat - Windows 一键编译脚本
-:: 在 Windows 上编译 doc-ai-gateway.exe 并打包
+:: build.bat - Windows one-click build script
+:: Builds doc-ai-gateway.exe and packages a distributable zip
 :: ================================================================
 
 set "SCRIPT_DIR=%~dp0"
@@ -47,7 +48,7 @@ set GOOS=windows
 set GOARCH=amd64
 
 echo   Building...
-go build -mod=mod -ldflags="-s -w" -o dist/doc-ai-gateway.exe .
+go build -mod=mod -ldflags="-s -w -H windowsgui" -o dist/doc-ai-gateway.exe .
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Build failed.
     exit /b 1
@@ -70,41 +71,32 @@ copy /Y "%ROOT_DIR%dist\doc-ai-gateway.exe" "%PKG_DIR%\" >nul
 :: Copy config
 copy /Y "%ROOT_DIR%cfg.yml" "%PKG_DIR%\" >nul 2>&1
 
-:: Create default database
-echo   Creating default database...
-copy /Y "%ROOT_DIR%cfg.db.template" "%PKG_DIR%\cfg.db" >nul 2>&1
-if not exist "%ROOT_DIR%cfg.db.template" (
-    :: Create a minimal template - the app will initialize on first run
-    type nul > "%PKG_DIR%\cfg.db"
-)
-
-:: Copy test data
-if exist "%ROOT_DIR%testdata" xcopy /E /I /Q /Y "%ROOT_DIR%testdata" "%PKG_DIR%\testdata\" >nul
-
 :: Create README
 echo   Creating README...
 (
-    echo DocAI Gateway - 文档 AI 智能网关
+    echo DocAI Gateway - Doc AI Gateway
     echo ====================================
     echo.
-    echo 快速开始:
-    echo   1. 双击 doc-ai-gateway.exe 启动服务
-    echo   2. 打开浏览器访问 http://localhost:8080
-    echo   3. 使用默认账号 admin/admin 登录
+    echo Quick start:
+    echo   1. Double-click doc-ai-gateway.exe to start the service
+    echo   2. Open browser and visit http://localhost:8080
+    echo   3. Login with default account admin/admin
     echo.
-    echo 目录说明:
-    echo   doc-ai-gateway.exe  主程序
-    echo   cfg.yml            配置文件
-    echo   cfg.db             SQLite 数据库
-    echo   data\              文件存储目录
-    echo   testdata\          测试文件
+    echo NOTE: admin must change the password on first login.
+    echo The initial password expires if not changed within 2 hours.
+    echo Runtime logs are in logs\ directory, rotated hourly, kept 7 days.
     echo.
-    echo 对外接口:
-    echo   POST /api/files/upload   上传文件
-    echo   GET  /api/files/status/:id  查询文件状态
-    echo   POST /api/ai/call       调用 AI 接口
+    echo Directories:
+    echo   doc-ai-gateway.exe  Main program
+    echo   cfg.yml             Config file
+    echo   data\               File storage directory
     echo.
-    echo 管理后台: http://localhost:8080/admin
+    echo External APIs:
+    echo   POST /api/files/upload       Upload file
+    echo   GET  /api/files/status/:id   Query file status
+    echo   POST /api/ai/call            Call AI interface
+    echo.
+    echo Admin console: http://localhost:8080/admin
 ) > "%PKG_DIR%\README.txt"
 
 :: Package as zip
@@ -129,7 +121,6 @@ echo.
 echo Contents:
 echo   doc-ai-gateway.exe
 echo   cfg.yml
-echo   cfg.db
 echo   README.txt
 echo.
 echo Distribute the zip file to Windows users.
@@ -140,4 +131,4 @@ echo ================================================================
 if exist "%PKG_DIR%" rmdir /S /Q "%PKG_DIR%"
 echo [INFO] Intermediate files cleaned up.
 
-endlocal
+endlocal

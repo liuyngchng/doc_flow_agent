@@ -1,13 +1,21 @@
 # ================================================================
-# Production Docker image for doc-ai-gateway
-# 只打包预编译的二进制，不编译
+# Production Docker image for doc-ai-gateway.
+#
+# 只打包预编译的二进制，不编译。
+# 先构建二进制 (scripts/build.sh)，再用此文件构建镜像。
+#
+# Run:
+#   docker run -p 8080:8080 -v $(pwd)/data:/app/data doc-ai-gateway:latest
 # ================================================================
-FROM alpine:3.20
+FROM ubuntu:24.04
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# 预编译二进制
 COPY dist/doc-ai-gateway /app/doc-ai-gateway
 COPY cfg.yml /app/cfg.yml
 
