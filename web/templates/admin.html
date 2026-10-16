@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/lib/font-awesome.all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <title>{{.page_title}}</title>
+</head>
+<body>
+    <div class="container">
+        <header style="display:flex;align-items:center;">
+            <h1 style="flex:1;"><i class="fas fa-robot"></i> {{.page_title}}</h1>
+            <div class="system-settings-link-container" style="position:static;padding:0;">
+                <a href="#" class="system-settings-link" onclick="logout(); return false;">
+                    <i class="fas fa-sign-out-alt"></i> 退出
+                </a>
+            </div>
+        </header>
+
+        <div class="cfg-layout">
+            <nav class="cfg-sidebar">
+                <div class="cfg-tab active" data-tab="interfaces">
+                    <i class="fas fa-code"></i> AI 接口管理
+                </div>
+                <div class="cfg-tab" data-tab="llm">
+                    <i class="fas fa-robot"></i> LLM 模型配置
+                </div>
+                <div class="cfg-divider"></div>
+                <div class="cfg-tab" data-tab="files">
+                    <i class="fas fa-folder"></i> 文件管理
+                </div>
+                <div class="cfg-tab" data-tab="logs">
+                    <i class="fas fa-list-alt"></i> 调用日志
+                </div>
+                <div class="cfg-divider"></div>
+                <div class="cfg-tab" data-tab="oa-sim">
+                    <i class="fas fa-flask"></i> 模拟 OA 提交
+                </div>
+                <div class="cfg-divider"></div>
+                <div class="cfg-tab" data-tab="sys">
+                    <i class="fas fa-sliders-h"></i> 系统设置
+                </div>
+                <div class="cfg-tab" data-tab="users">
+                    <i class="fas fa-users"></i> 用户管理
+                </div>
+            </nav>
+
+            <div class="cfg-content">
+                <!-- AI 接口管理 -->
+                <div class="cfg-section active" id="section-interfaces">
+                    <h2><i class="fas fa-code"></i> AI 接口管理</h2>
+                    <p style="color:#888;margin-bottom:16px;">配置 LLM 调用接口，定义提示词模板、输入参数和输出格式。OA 系统通过 <code>/api/ai/call</code> 调用。</p>
+                    <button class="cfg-btn cfg-btn-save" onclick="showIfaceModal()" style="margin-bottom:16px;">
+                        <i class="fas fa-plus"></i> 新建接口
+                    </button>
+                    <table class="result-table">
+                        <thead><tr><th>ID</th><th>名称</th><th>路径</th><th>状态</th><th>版本</th><th>操作</th></tr></thead>
+                        <tbody id="ifacesTbody"><tr><td colspan="6" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+                    </table>
+
+                    <!-- 接口编辑弹窗 -->
+                    <div id="ifaceModal" class="modal-overlay">
+                        <div class="modal-lg">
+                            <h3 id="ifaceModalTitle"><i class="fas fa-code"></i> 新建 AI 接口</h3>
+                            <form id="ifaceForm" style="margin-top:20px;">
+                                <input type="hidden" id="ifaceId" value="0">
+                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                    <div class="form-g" style="flex:1;min-width:200px;">
+                                        <label>接口名称 <span style="color:#e53935;">*</span></label>
+                                        <input type="text" id="ifaceName" required placeholder="如：收文类型判断" style="width:100%;">
+                                    </div>
+                                    <div class="form-g" style="flex:1;min-width:200px;">
+                                        <label>接口路径 <span style="color:#e53935;">*</span></label>
+                                        <input type="text" id="ifacePath" required placeholder="如：receive-type" style="width:100%;">
+                                    </div>
+                                </div>
+                                <div class="form-g">
+                                    <label>描述</label>
+                                    <input type="text" id="ifaceDesc" placeholder="接口用途说明" style="width:100%;">
+                                </div>
+                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                    <div class="form-g" style="flex:1;">
+                                        <label>关联 LLM 模型 <span style="color:#999;">(可选)</span></label>
+                                        <select id="ifaceLLM" style="width:100%;padding:10px 14px;border:2px solid #e0e3e8;border-radius:8px;"></select>
+                                    </div>
+                                    <div class="form-g" style="flex:1;">
+                                        <label>Temperature</label>
+                                        <input type="number" id="ifaceTemp" step="0.1" min="0" max="2" placeholder="默认" style="width:100%;">
+                                    </div>
+                                    <div class="form-g" style="flex:1;">
+                                        <label>Max Tokens</label>
+                                        <input type="number" id="ifaceMaxTok" min="1" max="32768" placeholder="默认" style="width:100%;">
+                                    </div>
+                                </div>
+                                <div class="form-g">
+                                    <label>提示词模板 <span style="color:#e53935;">*</span></label>
+                                    <textarea id="ifacePrompt" rows="10" placeholder="输入提示词模板..." style="width:100%;min-height:200px;"></textarea>
+                                </div>
+                                <details style="margin-bottom:20px;">
+                                    <summary style="cursor:pointer;color:#4b6cb7;font-weight:600;">输入参数定义 (可选)</summary>
+                                    <div id="inputParamsContainer" style="margin-top:8px;"></div>
+                                    <button type="button" class="cfg-btn cfg-btn-reset" onclick="addInputParam()" style="margin-top:8px;padding:6px 14px;">
+                                        <i class="fas fa-plus"></i> 添加参数
+                                    </button>
+                                </details>
+                                <div class="form-g">
+                                    <label>输出 JSON Schema <span style="color:#999;">(可选)</span></label>
+                                    <textarea id="ifaceSchema" rows="6" placeholder='{"type":"object","properties":{"result":{"type":"string"}}}' style="width:100%;min-height:120px;"></textarea>
+                                </div>
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                        <input type="checkbox" id="ifaceEnabled" checked> 启用此接口
+                                    </label>
+                                </div>
+                                <div class="modal-actions">
+                                    <button type="button" class="cfg-btn cfg-btn-reset" onclick="hideIfaceModal()">取消</button>
+                                    <button type="submit" class="cfg-btn cfg-btn-save">保存</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LLM 模型配置 -->
+                <div class="cfg-section" id="section-llm">
+                    <h2><i class="fas fa-robot"></i> LLM 模型配置</h2>
+                    <p style="color:#888;margin-bottom:16px;">配置 OpenAI 兼容的 LLM 模型。至少需要一个默认模型。</p>
+                    <button class="cfg-btn cfg-btn-save" onclick="showLLMModal()" style="margin-bottom:16px;">
+                        <i class="fas fa-plus"></i> 新建模型配置
+                    </button>
+                    <table class="result-table">
+                        <thead><tr><th>名称</th><th>API 地址</th><th>模型</th><th>默认</th><th>操作</th></tr></thead>
+                        <tbody id="llmTbody"><tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+                    </table>
+
+                    <div id="llmModal" class="modal-overlay">
+                        <div class="modal-md">
+                            <h3 id="llmModalTitle"><i class="fas fa-robot"></i> 新建 LLM 配置</h3>
+                            <form id="llmForm" style="margin-top:20px;">
+                                <input type="hidden" id="llmId" value="0">
+                                <div class="form-g"><label>名称 <span style="color:#e53935;">*</span></label><input type="text" id="llmName" required placeholder="如：DeepSeek V3" style="width:100%;"></div>
+                                <div class="form-g"><label>API 地址 <span style="color:#e53935;">*</span></label><input type="text" id="llmURI" required placeholder="https://api.example.com/v1" style="width:100%;"></div>
+                                <div class="form-g"><label>API Key <span style="color:#e53935;">*</span></label><input type="password" id="llmKey" required placeholder="sk-xxx" style="width:100%;"></div>
+                                <div class="form-g"><label>模型名称 <span style="color:#e53935;">*</span></label><input type="text" id="llmModel" required placeholder="如：qwen-plus" style="width:100%;"></div>
+                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                    <div class="form-g" style="flex:1;"><label>Temperature</label><input type="number" id="llmTemp" step="0.1" min="0" max="2" value="0.7" style="width:100%;"></div>
+                                    <div class="form-g" style="flex:1;"><label>Max Tokens</label><input type="number" id="llmMaxTok" min="1" max="32768" value="4096" style="width:100%;"></div>
+                                </div>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:16px 0;">
+                                    <input type="checkbox" id="llmDefault"> 设为默认模型
+                                </label>
+                                <div class="modal-actions">
+                                    <button type="button" class="cfg-btn cfg-btn-reset" onclick="hideLLMModal()">取消</button>
+                                    <button type="submit" class="cfg-btn cfg-btn-save">保存</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 文件管理 -->
+                <div class="cfg-section" id="section-files">
+                    <h2><i class="fas fa-folder"></i> 文件管理</h2>
+                    <p style="color:#888;margin-bottom:16px;">查看上传文件列表及预处理状态。</p>
+                    <table class="result-table">
+                        <thead><tr><th>File ID</th><th>文件名</th><th>类型</th><th>状态</th><th>文本长度</th><th>上传时间</th><th>操作</th></tr></thead>
+                        <tbody id="filesTbody"><tr><td colspan="7" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+
+                <!-- 调用日志 -->
+                <div class="cfg-section" id="section-logs">
+                    <h2><i class="fas fa-list-alt"></i> 调用日志</h2>
+                    <table class="result-table">
+                        <thead><tr><th>File ID</th><th>接口路径</th><th>状态</th><th>耗时(ms)</th><th>时间</th></tr></thead>
+                        <tbody id="logsTbody"><tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+
+                <!-- 模拟 OA 提交 -->
+                <div class="cfg-section" id="section-oa-sim">
+                    <h2><i class="fas fa-flask"></i> 模拟 OA 提交</h2>
+                    <p style="color:#888;margin-bottom:16px;">模拟 OA 系统上传文件并调用 AI 接口，用于测试和体验。</p>
+
+                    <div class="oa-step">
+                        <h3>步骤 1: 上传文件</h3>
+                        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                            <input type="file" id="oaFile" style="padding:8px;">
+                            <button class="cfg-btn cfg-btn-save" onclick="oaUpload()">
+                                <i class="fas fa-upload"></i> 上传
+                            </button>
+                        </div>
+                        <div id="oaUploadResult" style="margin-top:8px;font-size:0.85rem;"></div>
+                    </div>
+
+                    <div class="oa-step">
+                        <h3>步骤 2: 调用 AI 接口</h3>
+                        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                            <label>接口: </label>
+                            <select id="oaInterface" style="padding:10px 14px;border:2px solid #e0e3e8;border-radius:8px;min-width:200px;"></select>
+                            <label>File ID: </label>
+                            <input type="text" id="oaFileId" placeholder="从上一步获取" style="padding:10px 14px;border:2px solid #e0e3e8;border-radius:8px;width:200px;">
+                            <button class="cfg-btn cfg-btn-save" onclick="oaCall()">
+                                <i class="fas fa-play"></i> 调用
+                            </button>
+                        </div>
+                        <details style="margin-top:8px;">
+                            <summary style="cursor:pointer;color:#4b6cb7;">额外参数 (JSON)</summary>
+                            <textarea id="oaParams" rows="4" style="width:100%;max-width:500px;font-family:monospace;font-size:0.85rem;margin-top:4px;" placeholder='{"node_name":"收文登记","form_type":""}'></textarea>
+                        </details>
+                    </div>
+
+                    <div class="oa-step">
+                        <h3>返回结果</h3>
+                        <pre id="oaResult" style="background:#2d2d2d;color:#f8f8f2;padding:16px;border-radius:8px;overflow-x:auto;max-height:400px;font-size:0.85rem;">等待调用...</pre>
+                    </div>
+                </div>
+
+                <!-- 系统设置 -->
+                <div class="cfg-section" id="section-sys">
+                    <h2><i class="fas fa-sliders-h"></i> 系统设置</h2>
+                    <div class="form-g">
+                        <label>系统名称</label>
+                        <input type="text" id="sysName" style="max-width:400px;">
+                    </div>
+                    <button class="cfg-btn cfg-btn-save" onclick="saveSysConfig()" style="margin-top:16px;">
+                        <i class="fas fa-check"></i> 保存
+                    </button>
+                </div>
+
+                <!-- 用户管理 -->
+                <div class="cfg-section" id="section-users">
+                    <h2><i class="fas fa-users"></i> 用户管理</h2>
+                    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:flex-end;">
+                        <div class="form-g" style="margin-bottom:0;flex:1;min-width:140px;">
+                            <label>用户名</label>
+                            <input type="text" id="newUserName" placeholder="用户名" style="max-width:200px;">
+                        </div>
+                        <div class="form-g" style="margin-bottom:0;flex:1;min-width:140px;">
+                            <label>密码</label>
+                            <input type="password" id="newUserPwd" placeholder="密码" style="max-width:200px;">
+                        </div>
+                        <div class="form-g" style="margin-bottom:0;">
+                            <label>角色</label>
+                            <select id="newUserRole" style="max-width:150px;padding:10px 14px;border:2px solid #e0e3e8;border-radius:8px;font-size:0.9rem;">
+                                <option value="0">普通用户</option>
+                                <option value="1">管理员</option>
+                            </select>
+                        </div>
+                        <button class="cfg-btn cfg-btn-save" onclick="addUser()">
+                            <i class="fas fa-plus"></i> 添加用户
+                        </button>
+                    </div>
+                    <table class="result-table">
+                        <thead><tr><th>用户名</th><th>角色</th><th>备注</th><th>操作</th></tr></thead>
+                        <tbody id="usersTbody"><tr><td colspan="4" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer><p>{{.sys_name}} - 系统管理</p></footer>
+    </div>
+
+    <div id="toast" class="cfg-toast"></div>
+
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

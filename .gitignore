@@ -1,0 +1,33 @@
+# 编译产物
+dist/
+*.exe
+*.test
+*.out
+
+# 运行时数据
+cfg.db
+cfg.db-shm
+cfg.db-wal
+cfg.yml
+data/
+logs/
+
+# Go
+vendor/
+*.prof
+*.pprof
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.log
+tmp/

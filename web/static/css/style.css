@@ -1,0 +1,652 @@
+/* ============================================================
+   基础样式
+   ============================================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+    min-height: 100vh;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.container {
+    width: 100%;
+    max-width: 1280px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 40px);
+}
+
+header {
+    background: linear-gradient(to right, #4b6cb7, #182848);
+    color: white;
+    padding: 20px 30px;
+    position: relative;
+}
+
+header h1 {
+    font-size: 1.8rem;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 5px;
+}
+
+header p {
+    text-align: center;
+    opacity: 0.85;
+}
+
+.system-settings-link-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.system-settings-link {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    border-radius: 5px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    font-weight: 600;
+}
+
+.system-settings-link:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px);
+}
+
+footer {
+    padding: 15px;
+    text-align: center;
+    color: #999;
+    font-size: 0.85rem;
+    border-top: 1px solid #eee;
+}
+
+/* ============================================================
+   登录页样式
+   ============================================================ */
+.login-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    width: 100%;
+}
+
+.login-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+    width: 100%;
+    max-width: 420px;
+    overflow: hidden;
+}
+
+.login-header {
+    background: linear-gradient(to right, #4b6cb7, #182848);
+    color: white;
+    padding: 36px 30px 30px;
+    text-align: center;
+}
+
+.login-header i {
+    font-size: 3rem;
+    margin-bottom: 12px;
+    display: block;
+    opacity: 0.9;
+}
+
+.login-header h1 {
+    font-size: 1.6rem;
+    margin-bottom: 6px;
+}
+
+.login-header p {
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
+.login-error {
+    margin: 20px 30px 0;
+    padding: 12px 16px;
+    background: #fff0f0;
+    border: 1px solid #ffcdd2;
+    border-radius: 8px;
+    color: #c62828;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.login-form {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.login-field label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 6px;
+}
+
+.login-field label i {
+    width: 18px;
+    color: #4b6cb7;
+}
+
+.login-field input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e0e3e8;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.login-field input:focus {
+    outline: none;
+    border-color: #4b6cb7;
+    box-shadow: 0 0 0 3px rgba(75, 108, 183, 0.12);
+}
+
+.login-btn {
+    width: 100%;
+    padding: 13px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: linear-gradient(135deg, #4b6cb7, #3a5a9e);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    margin-top: 6px;
+}
+
+.login-btn:hover {
+    background: linear-gradient(135deg, #3a5a9e, #2c487e);
+    box-shadow: 0 4px 12px rgba(75, 108, 183, 0.3);
+    transform: translateY(-1px);
+}
+
+.login-footer {
+    padding: 16px 30px 24px;
+    text-align: center;
+    color: #999;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    border-top: 1px solid #f0f0f0;
+}
+
+.login-register-link {
+    color: #4b6cb7;
+    text-decoration: none;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.2s;
+}
+
+.login-register-link:hover {
+    color: #3a5a9e;
+    text-decoration: underline;
+}
+
+.login-success {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    background: #f0fff4;
+    border-radius: 6px;
+    color: #2e7d32;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+}
+
+/* ============================================================
+   修改密码弹窗
+   ============================================================ */
+.pwd-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.pwd-modal {
+    background: white;
+    border-radius: 12px;
+    padding: 28px 32px;
+    width: 360px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+}
+.pwd-modal h3 {
+    margin: 0 0 20px;
+    font-size: 1.1rem;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pwd-modal-error {
+    padding: 10px 14px;
+    background: #fff0f0;
+    border-radius: 6px;
+    color: #c62828;
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+}
+.pwd-field {
+    margin-bottom: 14px;
+}
+.pwd-field label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 4px;
+}
+.pwd-field input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid #e0e3e8;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+.pwd-field input:focus {
+    outline: none;
+    border-color: #4b6cb7;
+}
+.pwd-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.force-pwd-tip {
+    margin: 0 0 16px;
+    color: #888;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+/* ============================================================
+   通用按钮
+   ============================================================ */
+.cfg-btn {
+    padding: 11px 28px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cfg-btn-save {
+    background: linear-gradient(135deg, #4b6cb7, #3a5a9e);
+    color: white;
+}
+
+.cfg-btn-save:hover {
+    background: linear-gradient(135deg, #3a5a9e, #2c487e);
+    box-shadow: 0 4px 12px rgba(75, 108, 183, 0.3);
+    transform: translateY(-1px);
+}
+
+.cfg-btn-reset {
+    background: #f0f0f0;
+    color: #555;
+}
+
+.cfg-btn-reset:hover {
+    background: #e0e0e0;
+}
+
+/* ============================================================
+   管理后台布局
+   ============================================================ */
+.cfg-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.cfg-sidebar {
+    width: 200px;
+    background: linear-gradient(180deg, #f8f9fb 0%, #eef1f6 100%);
+    border-right: 1px solid #e0e3e8;
+    padding: 16px 0;
+    flex-shrink: 0;
+}
+
+.cfg-tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: #555;
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.cfg-tab:hover {
+    background: rgba(75, 108, 183, 0.06);
+    color: #333;
+}
+
+.cfg-tab.active {
+    background: rgba(75, 108, 183, 0.1);
+    color: #4b6cb7;
+    border-left-color: #4b6cb7;
+    font-weight: 600;
+}
+
+.cfg-tab i {
+    width: 18px;
+    text-align: center;
+    font-size: 0.95rem;
+}
+
+.cfg-divider {
+    margin: 8px 16px;
+    border-top: 1px solid #dce2ec;
+}
+
+.cfg-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    background: #fff;
+}
+
+.cfg-section {
+    display: none;
+}
+
+.cfg-section.active {
+    display: block;
+}
+
+.cfg-section h2 {
+    font-size: 1.25rem;
+    color: #2c3e50;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #eef1f6;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cfg-section h2 i {
+    color: #4b6cb7;
+}
+
+/* ============================================================
+   表单元素
+   ============================================================ */
+.form-g {
+    margin-bottom: 20px;
+}
+
+.form-g label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 6px;
+}
+
+.form-g input[type="text"],
+.form-g input[type="password"],
+.form-g input[type="number"],
+.form-g textarea,
+.form-g select {
+    width: 100%;
+    max-width: 560px;
+    padding: 10px 14px;
+    border: 2px solid #e0e3e8;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+    font-family: inherit;
+}
+
+.form-g input:focus,
+.form-g textarea:focus,
+.form-g select:focus {
+    outline: none;
+    border-color: #4b6cb7;
+    box-shadow: 0 0 0 3px rgba(75, 108, 183, 0.12);
+}
+
+.form-g textarea {
+    max-width: 720px;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+/* ============================================================
+   表格
+   ============================================================ */
+.result-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.result-table th {
+    background: #f8f9fb;
+    font-weight: 600;
+    color: #5f6368;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 2px solid #e8eaed;
+}
+
+.result-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    color: #444;
+}
+
+.result-table tbody tr:hover { background: #f8f9fe; }
+.result-table tbody tr:last-child td { border-bottom: none; }
+
+.badge {
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.badge-success { background: #e8f5e9; color: #2e7d32; }
+.badge-warning { background: #fff3e0; color: #e65100; }
+.badge-danger { background: #ffebee; color: #c62828; }
+.badge-gray { background: #f0f2f5; color: #666; }
+
+/* ============================================================
+   模态框
+   ============================================================ */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+
+.modal-lg {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    width: 800px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.modal-md {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    width: 520px;
+    max-width: 95vw;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    justify-content: flex-end;
+}
+
+/* ============================================================
+   Toast
+   ============================================================ */
+.cfg-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 14px 24px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    font-size: 0.9rem;
+    z-index: 99999;
+    display: none;
+    animation: cfgToastIn 0.3s ease-out;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+.cfg-toast.success { background: #2e7d32; }
+.cfg-toast.error { background: #c62828; }
+
+@keyframes cfgToastIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   OA Simulator
+   ============================================================ */
+.oa-step {
+    background: #fafbfc;
+    border: 1px solid #e0e3e8;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.oa-step h3 {
+    font-size: 1rem;
+    color: #4b6cb7;
+    margin-bottom: 12px;
+}
+
+/* ============================================================
+   响应式
+   ============================================================ */
+@media (max-width: 768px) {
+    .container {
+        height: 95vh;
+        border-radius: 12px;
+    }
+
+    header {
+        padding: 15px;
+    }
+
+    header h1 {
+        font-size: 1.5rem;
+        padding-top: 10px;
+    }
+
+    .system-settings-link-container {
+        position: static;
+        justify-content: center;
+        margin-top: 10px;
+    }
+
+    .cfg-layout { flex-direction: column; }
+    .cfg-sidebar {
+        width: 100%;
+        flex-direction: row;
+        display: flex;
+        padding: 8px;
+        overflow-x: auto;
+        border-right: none;
+        border-bottom: 1px solid #e0e3e8;
+    }
+    .cfg-tab {
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        white-space: nowrap;
+        padding: 10px 16px;
+    }
+    .cfg-tab.active {
+        border-left-color: transparent;
+        border-bottom-color: #4b6cb7;
+    }
+    .cfg-content { padding: 20px 16px; }
+    .form-g input,
+    .form-g textarea,
+    .form-g select { max-width: 100%; }
+}
+
+@media (max-width: 480px) {
+    .kb-select { min-width: 100%; }
+}
