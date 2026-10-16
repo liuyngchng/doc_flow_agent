@@ -5,13 +5,28 @@
 # 先构建二进制 (scripts/build.sh)，再用此文件构建镜像。
 #
 # Run:
-#   docker run -p 8080:8080 -v $(pwd)/data:/app/data doc-ai-gateway:latest
+#   docker run -d --rm --name doc-ai-gateway -p 8080:8080 \
+#     -v $(pwd)/data:/app/data \
+#     doc-ai-gateway:latest
 # ================================================================
 FROM ubuntu:24.04
 
+ARG HTTP_PROXY=""
+ARG HTTPS_PROXY=""
+ARG NO_PROXY=""
+ENV HTTP_PROXY="$HTTP_PROXY" HTTPS_PROXY="$HTTPS_PROXY" NO_PROXY="$NO_PROXY" \
+    http_proxy="$HTTP_PROXY" https_proxy="$HTTPS_PROXY" no_proxy="$NO_PROXY"
+
+RUN if [ -n "$HTTP_PROXY" ]; then \
+        echo "Acquire::http::Proxy \"$HTTP_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi; \
+    if [ -n "$HTTPS_PROXY" ]; then \
+        echo "Acquire::https::Proxy \"$HTTPS_PROXY\";" >> /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates tzdata \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/01proxy
 
 WORKDIR /app
 
@@ -20,7 +35,7 @@ COPY dist/doc-ai-gateway /app/doc-ai-gateway
 COPY cfg.yml.template /app/cfg.yml
 
 # 数据库和数据目录由 volume 挂载提供
-RUN mkdir -p /app/data/files
+RUN mkdir -p /app/data/files /app/data/logs
 
 ENV PORT=8080
 

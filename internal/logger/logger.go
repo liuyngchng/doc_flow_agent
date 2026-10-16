@@ -156,12 +156,12 @@ func Init(debug bool) error {
 	}
 
 	// 确保日志目录存在（rotatelogs 不会自动创建）
-	if err := os.MkdirAll("logs", 0755); err != nil {
+	if err := os.MkdirAll("data/logs", 0755); err != nil {
 		return err
 	}
 
 	fileWriter, err := rotatelogs.New(
-		"logs/app.%Y%m%d%H.log",
+		"data/logs/app.%Y%m%d%H.log",
 		rotatelogs.WithMaxAge(7*24*time.Hour),
 		rotatelogs.WithRotationTime(time.Hour),
 	)

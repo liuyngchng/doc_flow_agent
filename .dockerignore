@@ -1,0 +1,37 @@
+# ================================================================
+# Docker build context 忽略规则
+# ================================================================
+
+# Git
+.git
+.gitignore
+
+# Go 编译缓存（编译镜像 COPY build/deps/go*.tar.gz，需保留 deps）
+build/gocache
+build/gomodcache
+
+# 编译产物（Dockerfile.server 需 dist/doc-ai-gateway，其余排除）
+dist/*
+!dist/doc-ai-gateway
+
+# 运行时数据（不进入镜像）
+data
+logs
+cfg.db
+cfg.db-shm
+cfg.db-wal
+cfg.db-journal
+cfg.yml
+
+# IDE / 系统文件
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.log
+tmp

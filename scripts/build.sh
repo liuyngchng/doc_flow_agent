@@ -222,12 +222,17 @@ build_linux_docker() {
     # 构建生产镜像
     echo ""
     echo "=== Building production Docker image doc-ai-gateway:latest ==="
-    docker build -t doc-ai-gateway:latest -f scripts/Dockerfile.server .
+    docker build "${DOCKER_BUILD_ARGS[@]+"${DOCKER_BUILD_ARGS[@]}"}" \
+        -t doc-ai-gateway:latest -f scripts/Dockerfile.server .
 
     echo ""
     echo "=== Done ==="
     echo "  Docker image: doc-ai-gateway:latest"
-    echo "  Run with: docker run -p 8080:8080 -v \$(pwd)/data:/app/data doc-ai-gateway:latest"
+    echo "  Run with:"
+    echo "    # data/ 包含数据库 cfg.db、上传文件、日志，容器停后数据不丢"
+    echo "    docker run -d --rm --name doc-ai-gateway -p 8080:8080 \\"
+    echo "      -v \$(pwd)/data:/app/data \\"
+    echo "      doc-ai-gateway:latest"
 }
 
 case "${MODE:-docker}" in

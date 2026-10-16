@@ -36,8 +36,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 初始化 SQLite 存储
-	dbPath := "cfg.db"
+	// 初始化 SQLite 存储 — 放在 data/ 下，容器只需挂载这一个目录
+	os.MkdirAll("data", 0755)
+	dbPath := "data/cfg.db"
 	metaStore, err := store.NewSQLiteStore(dbPath)
 	if err != nil {
 		slog.Error("main_store_init_failed", "error", err)
