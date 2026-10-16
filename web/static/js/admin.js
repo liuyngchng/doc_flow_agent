@@ -394,7 +394,7 @@ async function loadLogs() {
 }
 
 // ============================================================
-// OA Simulator
+// 公文处理模拟器
 // ============================================================
 async function loadInterfacesForSelect() {
     try {

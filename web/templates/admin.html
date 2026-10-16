@@ -35,7 +35,7 @@
                 </div>
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="oa-sim">
-                    <i class="fas fa-flask"></i> 模拟 OA 提交
+                    <i class="fas fa-flask"></i> 模拟公文处理
                 </div>
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="sys">
@@ -50,7 +50,7 @@
                 <!-- AI 接口管理 -->
                 <div class="cfg-section active" id="section-interfaces">
                     <h2><i class="fas fa-code"></i> AI 接口管理</h2>
-                    <p style="color:#888;margin-bottom:16px;">配置 LLM 调用接口，定义提示词模板、输入参数和输出格式。OA 系统通过 <code>/api/ai/call</code> 调用。</p>
+                    <p style="color:#888;margin-bottom:16px;">配置 LLM 调用接口，定义提示词模板、输入参数和输出格式。电子公文工作流通过 <code>/api/ai/call</code> 调用。</p>
                     <button class="cfg-btn cfg-btn-save" onclick="showIfaceModal()" style="margin-bottom:16px;">
                         <i class="fas fa-plus"></i> 新建接口
                     </button>
@@ -178,10 +178,10 @@
                     </table>
                 </div>
 
-                <!-- 模拟 OA 提交 -->
+                <!-- 模拟公文处理 -->
                 <div class="cfg-section" id="section-oa-sim">
-                    <h2><i class="fas fa-flask"></i> 模拟 OA 提交</h2>
-                    <p style="color:#888;margin-bottom:16px;">模拟 OA 系统上传文件并调用 AI 接口，用于测试和体验。</p>
+                    <h2><i class="fas fa-flask"></i> 模拟公文处理</h2>
+                    <p style="color:#888;margin-bottom:16px;">模拟电子公文工作流上传文件并调用 AI 接口，用于测试和体验。</p>
 
                     <div class="oa-step">
                         <h3>步骤 1: 上传文件</h3>

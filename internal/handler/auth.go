@@ -192,7 +192,7 @@ func (h *AuthHandler) CookieAPIAuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// BearerAuthMiddleware Bearer Token 认证（OA 系统调用）
+// BearerAuthMiddleware Bearer Token 认证（电子公文工作流调用）
 func (h *AuthHandler) BearerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")

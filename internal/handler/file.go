@@ -24,7 +24,7 @@ func NewFileHandler(cfg *model.Config, st store.MetaStore) *FileHandler {
 	return &FileHandler{cfg: cfg, store: st}
 }
 
-// Upload 文件上传 (OA 系统调用)
+// Upload 文件上传 (电子公文工作流调用)
 func (h *FileHandler) Upload(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {

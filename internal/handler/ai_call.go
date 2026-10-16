@@ -24,7 +24,7 @@ func NewAICallHandler(st store.MetaStore) *AICallHandler {
 	return &AICallHandler{store: st}
 }
 
-// Call 通用 AI 调用 (OA 系统调用)
+// Call 通用 AI 调用 (电子公文工作流调用)
 // POST /api/ai/call
 func (h *AICallHandler) Call(c *gin.Context) {
 	var req struct {

@@ -143,13 +143,13 @@ func main() {
 	}
 
 	// ============================================================
-	// 对外接口（OA 系统调用）
+	// 对外接口（电子公文工作流调用）
 	// ============================================================
-	// 文件上传（不需要 OA token，直接用 multipart）
+	// 文件上传（不需要 访问令牌，直接用 multipart）
 	r.POST("/api/files/upload", h.File.Upload)
 	r.GET("/api/files/status/:file_id", h.File.Status)
 
-	// OA 调用接口（可以加 simple Bearer token，也可不加）
+	// 电子公文工作流调用接口（可以加 simple Bearer token，也可不加）
 	oaAPI := r.Group("/api/ai")
 	oaAPI.Use(handler.CallLogMiddleware(metaStore))
 	{

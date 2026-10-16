@@ -1,18 +1,18 @@
 # DocAI Gateway - 文档 AI 智能网关
 
-面向 OA 系统的通用 AI 网关，将文件预处理与可配置的 LLM 调用接口解耦。
+面向 电子公文工作流的通用 AI 网关，将文件预处理与可配置的 LLM 调用接口解耦。
 
 ## 功能
 
 - **文件预处理**：DOCX / 文字 PDF / XLSX 文本提取（扫描件 OCR 可后续扩展）
 - **可配置 LLM 接口**：管理员在 GUI 中配置提示词模板、输入占位符、输出 Schema
-- **通用 AI 调用**：OA 系统上传文件一次，通过 `file_id` 多次调用不同 AI 接口
-- **管理后台**：登录、AI 接口管理、LLM 模型配置、文件管理、调用日志、模拟 OA 提交
+- **通用 AI 调用**：电子公文工作流上传文件一次，通过 `file_id` 多次调用不同 AI 接口
+- **管理后台**：登录、AI 接口管理、LLM 模型配置、文件管理、调用日志、模拟公文处理
 
 ## 架构
 
 ```
-OA 系统 ──HTTP──> doc-ai-gateway ──> LLM API
+电子公文工作流 ──HTTP──> doc-ai-gateway ──> LLM API
                      │
                      ├── 文件预处理 (docx/pdf/xlsx 文本提取)
                      ├── 可配置 AI 接口 (提示词模板 + 占位符 + Schema)
@@ -40,14 +40,14 @@ scripts/build.sh           # 编译 + 构建 Docker 镜像
 docker run -p 8080:8080 -v $(pwd)/data:/app/data doc-ai-gateway:latest
 ```
 
-## 对外 API（OA 系统调用）
+## 对外 API（电子公文工作流调用）
 
 ### 1. 上传文件
 
 ```bash
 curl -X POST http://localhost:8080/api/files/upload \
   -F "file=@test.pdf" \
-  -F "biz_id=OA-FLOW-001"
+  -F "biz_id=FLOW-001"
 # 返回: {"file_id":"F-20261027001","status":"processing",...}
 ```
 
@@ -90,7 +90,7 @@ curl -X POST http://localhost:8080/api/ai/call \
 | `{{file.text}}` | 文件预处理后的纯文本全文 |
 | `{{file.name}}` | 原始文件名 |
 | `{{file.type}}` | 文件类型 (docx/pdf/xlsx) |
-| `{{params.xxx}}` | OA 调用时传入的自定义参数 |
+| `{{params.xxx}}` | 电子公文工作流调用时传入的自定义参数 |
 
 ## 项目结构
 
