@@ -80,7 +80,7 @@ func (s *SQLiteStore) initSchema() error {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE TABLE IF NOT EXISTS ai_interfaces (
+	CREATE TABLE IF NOT EXISTS interfaces (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
 		path TEXT UNIQUE NOT NULL,
@@ -138,6 +138,14 @@ func (s *SQLiteStore) initSchema() error {
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
+	}
+
+	// 兼容旧表：ai_interfaces → interfaces 重命名
+	var oldTableCount int
+	s.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='ai_interfaces'").Scan(&oldTableCount)
+	if oldTableCount > 0 {
+		s.db.Exec("ALTER TABLE ai_interfaces RENAME TO interfaces")
+		slog.Info("store_migrated_ai_interfaces_to_interfaces")
 	}
 
 	// 兼容旧表：如果 must_change_pwd 列不存在则添加
@@ -357,72 +365,72 @@ func (s *SQLiteStore) SetDefaultLLMConfig(id int64) error {
 }
 
 // ============================================================
-// AI 接口配置
+// 接口配置
 // ============================================================
 
-func (s *SQLiteStore) ListAIInterfaces() ([]model.AIInterface, error) {
+func (s *SQLiteStore) ListInterfaces() ([]model.InterfaceConfig, error) {
 	rows, err := s.db.Query(
-		"SELECT id, name, path, description, prompt_template, input_params, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM ai_interfaces ORDER BY id",
+		"SELECT id, name, path, description, prompt_template, input_params, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM interfaces ORDER BY id",
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	return scanAIInterfaces(rows)
+	return scanInterfaceConfigs(rows)
 }
 
-func (s *SQLiteStore) GetAIInterfaceByID(id int64) (*model.AIInterface, error) {
+func (s *SQLiteStore) GetInterfaceByID(id int64) (*model.InterfaceConfig, error) {
 	row := s.db.QueryRow(
-		"SELECT id, name, path, description, prompt_template, input_params, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM ai_interfaces WHERE id=?",
+		"SELECT id, name, path, description, prompt_template, input_params, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM interfaces WHERE id=?",
 		id,
 	)
-	iface, err := scanAIInterface(row)
+	iface, err := scanInterfaceConfig(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	return iface, err
 }
 
-func (s *SQLiteStore) GetAIInterfaceByPath(path string) (*model.AIInterface, error) {
+func (s *SQLiteStore) GetInterfaceByPath(path string) (*model.InterfaceConfig, error) {
 	row := s.db.QueryRow(
-		"SELECT id, name, path, description, prompt_template, input_params, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM ai_interfaces WHERE path=?",
+		"SELECT id, name, path, description, prompt_template, input_params, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM interfaces WHERE path=?",
 		path,
 	)
-	iface, err := scanAIInterface(row)
+	iface, err := scanInterfaceConfig(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	return iface, err
 }
 
-func (s *SQLiteStore) CreateAIInterface(iface *model.AIInterface) error {
+func (s *SQLiteStore) CreateInterface(iface *model.InterfaceConfig) error {
 	paramsJSON, _ := json.Marshal(iface.InputParams)
 	_, err := s.db.Exec(
-		"INSERT INTO ai_interfaces (name, path, description, prompt_template, input_params, output_schema, llm_config_id, temperature, max_tokens, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO interfaces (name, path, description, prompt_template, input_params, output_schema, llm_config_id, temperature, max_tokens, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		iface.Name, iface.Path, iface.Description, iface.PromptTemplate, string(paramsJSON),
 		iface.OutputSchema, iface.LLMConfigID, iface.Temperature, iface.MaxTokens, boolToInt(iface.Enabled),
 	)
 	return err
 }
 
-func (s *SQLiteStore) UpdateAIInterface(iface *model.AIInterface) error {
+func (s *SQLiteStore) UpdateInterface(iface *model.InterfaceConfig) error {
 	paramsJSON, _ := json.Marshal(iface.InputParams)
 	_, err := s.db.Exec(
-		"UPDATE ai_interfaces SET name=?, description=?, prompt_template=?, input_params=?, output_schema=?, llm_config_id=?, temperature=?, max_tokens=?, enabled=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+		"UPDATE interfaces SET name=?, description=?, prompt_template=?, input_params=?, output_schema=?, llm_config_id=?, temperature=?, max_tokens=?, enabled=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
 		iface.Name, iface.Description, iface.PromptTemplate, string(paramsJSON),
 		iface.OutputSchema, iface.LLMConfigID, iface.Temperature, iface.MaxTokens, boolToInt(iface.Enabled), iface.ID,
 	)
 	return err
 }
 
-func (s *SQLiteStore) DeleteAIInterface(id int64) error {
-	_, err := s.db.Exec("DELETE FROM ai_interfaces WHERE id=?", id)
+func (s *SQLiteStore) DeleteInterface(id int64) error {
+	_, err := s.db.Exec("DELETE FROM interfaces WHERE id=?", id)
 	return err
 }
 
 func (s *SQLiteStore) IncrementInterfaceVersion(id int64) error {
-	_, err := s.db.Exec("UPDATE ai_interfaces SET version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=?", id)
+	_, err := s.db.Exec("UPDATE interfaces SET version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=?", id)
 	return err
 }
 
@@ -555,8 +563,8 @@ func boolToInt(b bool) int {
 	return 0
 }
 
-func scanAIInterface(scanner interface{ Scan(...interface{}) error }) (*model.AIInterface, error) {
-	var iface model.AIInterface
+func scanInterfaceConfig(scanner interface{ Scan(...interface{}) error }) (*model.InterfaceConfig, error) {
+	var iface model.InterfaceConfig
 	var paramsJSON string
 	var enabledInt int
 
@@ -584,10 +592,10 @@ func scanAIInterface(scanner interface{ Scan(...interface{}) error }) (*model.AI
 	return &iface, nil
 }
 
-func scanAIInterfaces(rows *sql.Rows) ([]model.AIInterface, error) {
-	var ifaces []model.AIInterface
+func scanInterfaceConfigs(rows *sql.Rows) ([]model.InterfaceConfig, error) {
+	var ifaces []model.InterfaceConfig
 	for rows.Next() {
-		var iface model.AIInterface
+		var iface model.InterfaceConfig
 		var paramsJSON string
 		var enabledInt int
 

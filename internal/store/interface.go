@@ -28,13 +28,13 @@ type MetaStore interface {
 	DeleteLLMConfig(id int64) error
 	SetDefaultLLMConfig(id int64) error
 
-	// --- AI 接口配置 ---
-	ListAIInterfaces() ([]model.AIInterface, error)
-	GetAIInterfaceByID(id int64) (*model.AIInterface, error)
-	GetAIInterfaceByPath(path string) (*model.AIInterface, error)
-	CreateAIInterface(iface *model.AIInterface) error
-	UpdateAIInterface(iface *model.AIInterface) error
-	DeleteAIInterface(id int64) error
+	// --- 接口配置 ---
+	ListInterfaces() ([]model.InterfaceConfig, error)
+	GetInterfaceByID(id int64) (*model.InterfaceConfig, error)
+	GetInterfaceByPath(path string) (*model.InterfaceConfig, error)
+	CreateInterface(iface *model.InterfaceConfig) error
+	UpdateInterface(iface *model.InterfaceConfig) error
+	DeleteInterface(id int64) error
 	IncrementInterfaceVersion(id int64) error
 
 	// --- 文件记录 ---

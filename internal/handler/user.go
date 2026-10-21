@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"doc-ai-gateway/internal/model"
@@ -62,20 +63,22 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "创建失败: " + err.Error()})
 		return
 	}
+	slog.Info("admin_create_user", "user", userName(c), "target", req.UserName, "role", req.Role)
 	c.JSON(200, gin.H{"status": "ok"})
 }
 
 // DeleteUser 删除用户
 func (h *UserHandler) DeleteUser(c *gin.Context) {
-	userName := c.Param("name")
-	if userName == "admin" {
+	targetName := c.Param("name")
+	if targetName == "admin" {
 		c.JSON(400, gin.H{"error": "不能删除 admin 用户"})
 		return
 	}
-	if err := h.store.DeleteUser(userName); err != nil {
+	if err := h.store.DeleteUser(targetName); err != nil {
 		c.JSON(500, gin.H{"error": "删除失败"})
 		return
 	}
+	slog.Info("admin_delete_user", "user", userName(c), "target", targetName)
 	c.JSON(200, gin.H{"status": "ok"})
 }
 

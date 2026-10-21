@@ -17,8 +17,11 @@ func Load(path string) (*model.Config, error) {
 			Port: 8080,
 		},
 		Sys: model.SysConfig{
-			Name:     "DocAI Gateway",
+			Name:     "Doc Gateway",
 			BasePath: "data",
+		},
+		DocParser: model.DocParserConfig{
+			URL: "",
 		},
 	}
 
@@ -39,7 +42,7 @@ func Load(path string) (*model.Config, error) {
 		cfg.Server.Port = 8080
 	}
 	if cfg.Sys.Name == "" {
-		cfg.Sys.Name = "DocAI Gateway"
+		cfg.Sys.Name = "Doc Gateway"
 	}
 	if cfg.Sys.BasePath == "" {
 		cfg.Sys.BasePath = "data"

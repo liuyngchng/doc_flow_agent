@@ -1,5 +1,5 @@
 // ============================================================
-// DocAI Gateway - Register Page
+// Doc Gateway - Register Page
 // ============================================================
 
 document.getElementById('regForm').addEventListener('submit', async function(e) {

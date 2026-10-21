@@ -1,5 +1,5 @@
 // ============================================================
-// DocAI Gateway - Login Page
+// Doc Gateway - Login Page
 // ============================================================
 
 document.getElementById('loginForm').addEventListener('submit', async function(e) {

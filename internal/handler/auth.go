@@ -117,6 +117,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 设置 httpOnly cookie
 	c.SetCookie("auth_token", token, int(ttl.Seconds()), "/", "", false, true)
 
+	slog.Info("user_login", "user", user.UserName, "client_ip", c.ClientIP())
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":          "ok",
 		"token":           token,
@@ -131,6 +133,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 // Logout 登出
 func (h *AuthHandler) Logout(c *gin.Context) {
+	token, _ := c.Cookie("auth_token")
+	if u := parseToken(token, h.jwtKey); u != nil {
+		slog.Info("user_logout", "user", u.UserName, "client_ip", c.ClientIP())
+	}
+
 	c.SetCookie("auth_token", "", -1, "/", "", false, true)
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
@@ -193,6 +200,7 @@ func (h *AuthHandler) CookieAPIAuthMiddleware() gin.HandlerFunc {
 }
 
 // BearerAuthMiddleware Bearer Token 认证（电子公文工作流调用）
+// 已废弃，统一改用 APITokenMiddleware
 func (h *AuthHandler) BearerAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -211,6 +219,40 @@ func (h *AuthHandler) BearerAuthMiddleware() gin.HandlerFunc {
 		}
 
 		c.Set("user", user)
+		c.Next()
+	}
+}
+
+// APITokenMiddleware 对外 API 认证中间件
+// 管理员可配置开关和 token：api_auth_enabled=1 时校验 Bearer token，否则直接放行
+func (h *AuthHandler) APITokenMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		enabled, _ := h.store.GetConfig("api_auth_enabled")
+		if enabled != "1" {
+			c.Next()
+			return
+		}
+
+		expectedToken, _ := h.store.GetConfig("api_auth_token")
+		if expectedToken == "" {
+			c.Next()
+			return
+		}
+
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "缺少 Authorization header"})
+			c.Abort()
+			return
+		}
+
+		token := authHeader[7:]
+		if token != expectedToken {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的 token"})
+			c.Abort()
+			return
+		}
+
 		c.Next()
 	}
 }

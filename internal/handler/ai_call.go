@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"time"
@@ -14,64 +15,135 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AICallHandler 通用 AI 调用处理器
-type AICallHandler struct {
+// CallHandler 通用调用处理器
+type CallHandler struct {
 	store store.MetaStore
 }
 
-// NewAICallHandler 创建处理器
-func NewAICallHandler(st store.MetaStore) *AICallHandler {
-	return &AICallHandler{store: st}
+// NewCallHandler 创建处理器
+func NewCallHandler(st store.MetaStore) *CallHandler {
+	return &CallHandler{store: st}
 }
 
-// Call 通用 AI 调用 (电子公文工作流调用)
-// POST /api/ai/call
-func (h *AICallHandler) Call(c *gin.Context) {
-	var req struct {
-		FileID    string                 `json:"file_id"`
-		Interface string                 `json:"interface"`
-		Params    map[string]interface{} `json:"params"`
+// Call 通用调用
+// POST /api/call
+// 支持 Content-Type: application/json、text/plain、application/x-www-form-urlencoded
+func (h *CallHandler) Call(c *gin.Context) {
+	var fileID, ifacePath string
+	var params map[string]interface{}
+	var virtualFile *model.FileRecord
+
+	contentType := c.ContentType()
+
+	if strings.HasPrefix(contentType, "text/plain") {
+		// text/plain: body 为纯文本，interface 通过 query 参数指定
+		bodyBytes, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "读取请求体失败"})
+			return
+		}
+		plainText := strings.TrimSpace(string(bodyBytes))
+		if plainText == "" {
+			c.JSON(400, gin.H{"error": "请求体为空"})
+			return
+		}
+		ifacePath = c.Query("interface")
+		if ifacePath == "" {
+			c.JSON(400, gin.H{"error": "缺少 interface 参数"})
+			return
+		}
+		fileID = "TEXT-" + fmt.Sprintf("%05d", time.Now().UnixNano()%100000)
+		params = make(map[string]interface{})
+		// 构造虚拟文件记录
+		virtualFile = &model.FileRecord{
+			FileID:       fileID,
+			OriginalName: "plain_text.txt",
+			FileType:     "text",
+			TextContent:  plainText,
+			TextLength:   len(plainText),
+			Status:       model.FileStatusReady,
+		}
+	} else if strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
+		// form 表单：file_id、interface 固定字段，其余字段全部收进 params 给 LLM
+		if err := c.Request.ParseForm(); err != nil {
+			c.JSON(400, gin.H{"error": "解析表单失败"})
+			return
+		}
+		ifacePath = c.PostForm("interface")
+		fileID = c.PostForm("file_id")
+		if fileID == "" || ifacePath == "" {
+			c.JSON(400, gin.H{"error": "file_id 和 interface 不能为空"})
+			return
+		}
+		params = make(map[string]interface{})
+		for k, vs := range c.Request.PostForm {
+			if k == "file_id" || k == "interface" {
+				continue
+			}
+			if len(vs) == 1 {
+				params[k] = vs[0]
+			} else {
+				params[k] = vs
+			}
+		}
+	} else {
+		// application/json (默认)
+		var req struct {
+			FileID    string                 `json:"file_id"`
+			Interface string                 `json:"interface"`
+			Params    map[string]interface{} `json:"params"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": "参数错误"})
+			return
+		}
+		if req.FileID == "" || req.Interface == "" {
+			c.JSON(400, gin.H{"error": "file_id 和 interface 不能为空"})
+			return
+		}
+		fileID = req.FileID
+		ifacePath = req.Interface
+		params = req.Params
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "参数错误"})
-		return
-	}
-	if req.FileID == "" || req.Interface == "" {
-		c.JSON(400, gin.H{"error": "file_id 和 interface 不能为空"})
-		return
-	}
+
+	slog.Info("call_request", "interface", ifacePath, "file_id", fileID, "params", mustJSON(params))
 
 	startTime := time.Now()
 
 	// 1. 查找接口配置
-	iface, err := h.store.GetAIInterfaceByPath(req.Interface)
+	iface, err := h.store.GetInterfaceByPath(ifacePath)
 	if err != nil || iface == nil {
-		c.JSON(404, gin.H{"error": "AI 接口不存在: " + req.Interface})
+		c.JSON(404, gin.H{"error": "接口不存在: " + ifacePath})
 		return
 	}
 	if !iface.Enabled {
-		c.JSON(403, gin.H{"error": "AI 接口已禁用: " + req.Interface})
+		c.JSON(403, gin.H{"error": "接口已禁用: " + ifacePath})
 		return
 	}
 
-	// 2. 查找文件记录
-	file, err := h.store.GetFileRecord(req.FileID)
-	if err != nil || file == nil {
-		c.JSON(404, gin.H{"error": "文件不存在: " + req.FileID})
-		return
-	}
-	if file.Status == model.FileStatusProcessing {
-		c.JSON(202, gin.H{"error": "文件预处理中，请稍后重试", "file_id": req.FileID})
-		return
-	}
-	if file.Status == model.FileStatusFailed {
-		c.JSON(422, gin.H{"error": "文件预处理失败: " + file.ErrorMessage, "file_id": req.FileID})
-		return
+	// 2. 获取文件内容
+	var file *model.FileRecord
+	if virtualFile != nil {
+		file = virtualFile
+	} else {
+		file, err = h.store.GetFileRecord(fileID)
+		if err != nil || file == nil {
+			c.JSON(404, gin.H{"error": "文件不存在: " + fileID})
+			return
+		}
+		if file.Status == model.FileStatusProcessing {
+			c.JSON(202, gin.H{"error": "文件预处理中，请稍后重试", "file_id": fileID})
+			return
+		}
+		if file.Status == model.FileStatusFailed {
+			c.JSON(422, gin.H{"error": "文件预处理失败: " + file.ErrorMessage, "file_id": fileID})
+			return
+		}
 	}
 
 	// 3. 渲染 prompt
 	systemPrompt := "你是一个公文处理助手。请严格按照要求的 JSON 格式返回结果，不要包含任何其他文字。"
-	userPrompt, err := h.renderPrompt(iface, file, req.Params)
+	userPrompt, err := h.renderPrompt(iface, file, params)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -103,10 +175,10 @@ func (h *AICallHandler) Call(c *gin.Context) {
 
 	// 6. 记录日志
 	logEntry := &model.CallLog{
-		FileID:        req.FileID,
+		FileID:        fileID,
 		InterfaceID:   iface.ID,
-		InterfacePath: req.Interface,
-		InputParams:   mustJSON(req.Params),
+		InterfacePath: ifacePath,
+		InputParams:   mustJSON(params),
 		ElapsedMs:     elapsedMs,
 	}
 
@@ -116,23 +188,25 @@ func (h *AICallHandler) Call(c *gin.Context) {
 		logEntry.OutputResult = "{}"
 		h.store.CreateCallLog(logEntry)
 
-		slog.Error("ai_call_llm_error", "interface", req.Interface, "file_id", req.FileID, "error", err)
-		c.JSON(500, gin.H{"error": "AI 调用失败: " + err.Error()})
+		slog.Error("call_llm_error", "interface", ifacePath, "file_id", fileID, "error", err)
+		slog.Info("call_response", "interface", ifacePath, "file_id", fileID, "status", "error", "error_msg", err.Error(), "elapsed_ms", elapsedMs)
+		c.JSON(500, gin.H{"error": "调用失败: " + err.Error()})
 		return
 	}
 
 	// 7. 解析 + 校验输出
-	output, parseErr := h.parseAIOutput(resultText, iface.OutputSchema)
+	output, parseErr := h.parseOutput(resultText, iface.OutputSchema)
 	logEntry.OutputResult = mustJSON(output)
 	logEntry.Status = "success"
 	if parseErr != nil {
 		logEntry.ErrorMessage = parseErr.Error()
 		logEntry.Status = "error"
-		slog.Warn("ai_call_output_parse_warning", "interface", req.Interface, "error", parseErr)
+		slog.Warn("call_output_parse_warning", "interface", ifacePath, "error", parseErr)
 		h.store.CreateCallLog(logEntry)
+		slog.Info("call_response", "interface", ifacePath, "file_id", fileID, "status", "warning", "result", mustJSON(output), "elapsed_ms", elapsedMs)
 		c.JSON(200, gin.H{
-			"file_id":    req.FileID,
-			"interface":  req.Interface,
+			"file_id":    fileID,
+			"interface":  ifacePath,
 			"status":     "warning",
 			"result":     output,
 			"raw_output": resultText,
@@ -144,9 +218,11 @@ func (h *AICallHandler) Call(c *gin.Context) {
 
 	h.store.CreateCallLog(logEntry)
 
+	slog.Info("call_response", "interface", ifacePath, "file_id", fileID, "status", "success", "result", mustJSON(output), "elapsed_ms", elapsedMs)
+
 	c.JSON(200, gin.H{
-		"file_id":    req.FileID,
-		"interface":  req.Interface,
+		"file_id":    fileID,
+		"interface":  ifacePath,
 		"status":     "success",
 		"result":     output,
 		"elapsed_ms": elapsedMs,
@@ -154,7 +230,7 @@ func (h *AICallHandler) Call(c *gin.Context) {
 }
 
 // renderPrompt 渲染提示词模板
-func (h *AICallHandler) renderPrompt(iface *model.AIInterface, file *model.FileRecord, params map[string]interface{}) (string, error) {
+func (h *CallHandler) renderPrompt(iface *model.InterfaceConfig, file *model.FileRecord, params map[string]interface{}) (string, error) {
 	result := iface.PromptTemplate
 
 	// 替换文件占位符
@@ -195,13 +271,13 @@ func (h *AICallHandler) renderPrompt(iface *model.AIInterface, file *model.FileR
 }
 
 // getLLMConfig 获取 LLM 配置
-func (h *AICallHandler) getLLMConfig(iface *model.AIInterface) (*model.LLMConfig, error) {
+func (h *CallHandler) getLLMConfig(iface *model.InterfaceConfig) (*model.LLMConfig, error) {
 	if iface.LLMConfigID != nil && *iface.LLMConfigID > 0 {
 		cfg, err := h.store.GetLLMConfig(*iface.LLMConfigID)
 		if err == nil && cfg != nil {
 			return cfg, nil
 		}
-		slog.Warn("ai_call_llm_config_not_found", "id", *iface.LLMConfigID)
+		slog.Warn("call_llm_config_not_found", "id", *iface.LLMConfigID)
 	}
 
 	// 使用默认 LLM
@@ -212,8 +288,8 @@ func (h *AICallHandler) getLLMConfig(iface *model.AIInterface) (*model.LLMConfig
 	return cfg, nil
 }
 
-// parseAIOutput 解析 AI 输出
-func (h *AICallHandler) parseAIOutput(raw string, schema string) (interface{}, error) {
+// parseOutput 解析输出
+func (h *CallHandler) parseOutput(raw string, schema string) (interface{}, error) {
 	// 尝试提取 JSON（LLM 有时会在前后加说明）
 	raw = strings.TrimSpace(raw)
 

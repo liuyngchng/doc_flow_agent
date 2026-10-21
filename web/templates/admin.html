@@ -20,22 +20,22 @@
 
         <div class="cfg-layout">
             <nav class="cfg-sidebar">
-                <div class="cfg-tab active" data-tab="interfaces">
-                    <i class="fas fa-code"></i> AI 接口管理
+                <div class="cfg-tab active" data-tab="llm">
+                    <i class="fas fa-robot"></i> 模型配置
                 </div>
-                <div class="cfg-tab" data-tab="llm">
-                    <i class="fas fa-robot"></i> LLM 模型配置
+                <div class="cfg-tab" data-tab="interfaces">
+                    <i class="fas fa-code"></i> 接口管理
                 </div>
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="files">
                     <i class="fas fa-folder"></i> 文件管理
                 </div>
                 <div class="cfg-tab" data-tab="logs">
-                    <i class="fas fa-list-alt"></i> 调用日志
+                    <i class="fas fa-list-alt"></i> 日志查阅
                 </div>
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="oa-sim">
-                    <i class="fas fa-flask"></i> 模拟公文处理
+                    <i class="fas fa-flask"></i> 操作模拟
                 </div>
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="sys">
@@ -47,10 +47,47 @@
             </nav>
 
             <div class="cfg-content">
-                <!-- AI 接口管理 -->
-                <div class="cfg-section active" id="section-interfaces">
-                    <h2><i class="fas fa-code"></i> AI 接口管理</h2>
-                    <p style="color:#888;margin-bottom:16px;">配置 LLM 调用接口，定义提示词模板、输入参数和输出格式。电子公文工作流通过 <code>/api/ai/call</code> 调用。</p>
+                <!-- 模型配置 -->
+                <div class="cfg-section active" id="section-llm">
+                    <h2><i class="fas fa-robot"></i> 模型配置</h2>
+                    <p style="color:#888;margin-bottom:16px;">配置 OpenAI 兼容的 LLM 模型。至少需要一个默认模型。</p>
+                    <button class="cfg-btn cfg-btn-save" onclick="showLLMModal()" style="margin-bottom:16px;">
+                        <i class="fas fa-plus"></i> 新建模型配置
+                    </button>
+                    <table class="result-table">
+                        <thead><tr><th>名称</th><th>API 地址</th><th>模型</th><th>默认</th><th>操作</th></tr></thead>
+                        <tbody id="llmTbody"><tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+                    </table>
+
+                    <div id="llmModal" class="modal-overlay">
+                        <div class="modal-md">
+                            <h3 id="llmModalTitle"><i class="fas fa-robot"></i> 新建模型配置</h3>
+                            <form id="llmForm" style="margin-top:20px;">
+                                <input type="hidden" id="llmId" value="0">
+                                <div class="form-g"><label>名称 <span style="color:#e53935;">*</span></label><input type="text" id="llmName" required placeholder="如：DeepSeek V3" style="width:100%;"></div>
+                                <div class="form-g"><label>API 地址 <span style="color:#e53935;">*</span></label><input type="text" id="llmURI" required placeholder="https://api.example.com/v1" style="width:100%;"></div>
+                                <div class="form-g"><label>API Key <span style="color:#e53935;">*</span></label><input type="password" id="llmKey" required placeholder="sk-xxx" style="width:100%;"></div>
+                                <div class="form-g"><label>模型名称 <span style="color:#e53935;">*</span></label><input type="text" id="llmModel" required placeholder="如：qwen-plus" style="width:100%;"></div>
+                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                                    <div class="form-g" style="flex:1;"><label>Temperature</label><input type="number" id="llmTemp" step="0.1" min="0" max="2" value="0.7" style="width:100%;"></div>
+                                    <div class="form-g" style="flex:1;"><label>Max Tokens</label><input type="number" id="llmMaxTok" min="1" max="32768" value="4096" style="width:100%;"></div>
+                                </div>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:16px 0;">
+                                    <input type="checkbox" id="llmDefault"> 设为默认模型
+                                </label>
+                                <div class="modal-actions">
+                                    <button type="button" class="cfg-btn cfg-btn-reset" onclick="hideLLMModal()">取消</button>
+                                    <button type="submit" class="cfg-btn cfg-btn-save">保存</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 接口管理 -->
+                <div class="cfg-section" id="section-interfaces">
+                    <h2><i class="fas fa-code"></i> 接口管理</h2>
+                    <p style="color:#888;margin-bottom:16px;">配置接口，定义提示词模板、输入参数和输出格式。电子公文工作流通过 <code>/api/call</code> 调用。</p>
                     <button class="cfg-btn cfg-btn-save" onclick="showIfaceModal()" style="margin-bottom:16px;">
                         <i class="fas fa-plus"></i> 新建接口
                     </button>
@@ -62,7 +99,7 @@
                     <!-- 接口编辑弹窗 -->
                     <div id="ifaceModal" class="modal-overlay">
                         <div class="modal-lg">
-                            <h3 id="ifaceModalTitle"><i class="fas fa-code"></i> 新建 AI 接口</h3>
+                            <h3 id="ifaceModalTitle"><i class="fas fa-code"></i> 新建接口</h3>
                             <form id="ifaceForm" style="margin-top:20px;">
                                 <input type="hidden" id="ifaceId" value="0">
                                 <div style="display:flex;gap:12px;flex-wrap:wrap;">
@@ -122,43 +159,6 @@
                     </div>
                 </div>
 
-                <!-- LLM 模型配置 -->
-                <div class="cfg-section" id="section-llm">
-                    <h2><i class="fas fa-robot"></i> LLM 模型配置</h2>
-                    <p style="color:#888;margin-bottom:16px;">配置 OpenAI 兼容的 LLM 模型。至少需要一个默认模型。</p>
-                    <button class="cfg-btn cfg-btn-save" onclick="showLLMModal()" style="margin-bottom:16px;">
-                        <i class="fas fa-plus"></i> 新建模型配置
-                    </button>
-                    <table class="result-table">
-                        <thead><tr><th>名称</th><th>API 地址</th><th>模型</th><th>默认</th><th>操作</th></tr></thead>
-                        <tbody id="llmTbody"><tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
-                    </table>
-
-                    <div id="llmModal" class="modal-overlay">
-                        <div class="modal-md">
-                            <h3 id="llmModalTitle"><i class="fas fa-robot"></i> 新建 LLM 配置</h3>
-                            <form id="llmForm" style="margin-top:20px;">
-                                <input type="hidden" id="llmId" value="0">
-                                <div class="form-g"><label>名称 <span style="color:#e53935;">*</span></label><input type="text" id="llmName" required placeholder="如：DeepSeek V3" style="width:100%;"></div>
-                                <div class="form-g"><label>API 地址 <span style="color:#e53935;">*</span></label><input type="text" id="llmURI" required placeholder="https://api.example.com/v1" style="width:100%;"></div>
-                                <div class="form-g"><label>API Key <span style="color:#e53935;">*</span></label><input type="password" id="llmKey" required placeholder="sk-xxx" style="width:100%;"></div>
-                                <div class="form-g"><label>模型名称 <span style="color:#e53935;">*</span></label><input type="text" id="llmModel" required placeholder="如：qwen-plus" style="width:100%;"></div>
-                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                    <div class="form-g" style="flex:1;"><label>Temperature</label><input type="number" id="llmTemp" step="0.1" min="0" max="2" value="0.7" style="width:100%;"></div>
-                                    <div class="form-g" style="flex:1;"><label>Max Tokens</label><input type="number" id="llmMaxTok" min="1" max="32768" value="4096" style="width:100%;"></div>
-                                </div>
-                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:16px 0;">
-                                    <input type="checkbox" id="llmDefault"> 设为默认模型
-                                </label>
-                                <div class="modal-actions">
-                                    <button type="button" class="cfg-btn cfg-btn-reset" onclick="hideLLMModal()">取消</button>
-                                    <button type="submit" class="cfg-btn cfg-btn-save">保存</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- 文件管理 -->
                 <div class="cfg-section" id="section-files">
                     <h2><i class="fas fa-folder"></i> 文件管理</h2>
@@ -169,19 +169,19 @@
                     </table>
                 </div>
 
-                <!-- 调用日志 -->
+                <!-- 日志查阅 -->
                 <div class="cfg-section" id="section-logs">
-                    <h2><i class="fas fa-list-alt"></i> 调用日志</h2>
+                    <h2><i class="fas fa-list-alt"></i> 日志查阅</h2>
                     <table class="result-table">
                         <thead><tr><th>File ID</th><th>接口路径</th><th>状态</th><th>耗时(ms)</th><th>时间</th></tr></thead>
                         <tbody id="logsTbody"><tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
                     </table>
                 </div>
 
-                <!-- 模拟公文处理 -->
+                <!-- 操作模拟 -->
                 <div class="cfg-section" id="section-oa-sim">
-                    <h2><i class="fas fa-flask"></i> 模拟公文处理</h2>
-                    <p style="color:#888;margin-bottom:16px;">模拟电子公文工作流上传文件并调用 AI 接口，用于测试和体验。</p>
+                    <h2><i class="fas fa-flask"></i> 操作模拟</h2>
+                    <p style="color:#888;margin-bottom:16px;">模拟上传文件并调用接口，用于测试和体验。</p>
 
                     <div class="oa-step">
                         <h3>步骤 1: 上传文件</h3>
@@ -195,7 +195,7 @@
                     </div>
 
                     <div class="oa-step">
-                        <h3>步骤 2: 调用 AI 接口</h3>
+                        <h3>步骤 2: 调用接口</h3>
                         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
                             <label>接口: </label>
                             <select id="oaInterface" style="padding:10px 14px;border:2px solid #e0e3e8;border-radius:8px;min-width:200px;"></select>
@@ -223,6 +223,25 @@
                     <div class="form-g">
                         <label>系统名称</label>
                         <input type="text" id="sysName" style="max-width:400px;">
+                    </div>
+
+                    <h3 style="margin-top:24px;border-top:1px solid #e0e3e8;padding-top:20px;">对外 API 认证</h3>
+                    <p style="color:#888;margin-bottom:12px;font-size:0.85rem;">
+                        启用后调用 <code>/api/call</code> 必须携带 <code>Authorization: Bearer &lt;token&gt;</code> 头。
+                    </p>
+                    <div style="margin-bottom:12px;">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="checkbox" id="apiAuthEnabled" onchange="document.getElementById('apiTokenRow').style.display=this.checked?'flex':''"> 启用 API 认证
+                        </label>
+                    </div>
+                    <div id="apiTokenRow" style="display:flex;gap:8px;align-items:center;max-width:520px;">
+                        <div class="form-g" style="flex:1;margin-bottom:0;">
+                            <label>Token</label>
+                            <input type="text" id="apiAuthToken" placeholder="设置认证 token" style="width:100%;font-family:monospace;">
+                        </div>
+                        <button type="button" class="cfg-btn cfg-btn-reset" onclick="generateAPIToken()" style="margin-top:20px;white-space:nowrap;">
+                            <i class="fas fa-sync-alt"></i> 随机生成
+                        </button>
                     </div>
                     <button class="cfg-btn cfg-btn-save" onclick="saveSysConfig()" style="margin-top:16px;">
                         <i class="fas fa-check"></i> 保存

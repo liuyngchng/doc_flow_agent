@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"strconv"
 
 	"doc-ai-gateway/internal/model"
@@ -48,6 +49,7 @@ func (h *LLMConfigHandler) Create(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "创建失败: " + err.Error()})
 		return
 	}
+	slog.Info("admin_create_llm", "user", userName(c), "name", req.Name, "model", req.ModelName)
 	c.JSON(200, gin.H{"status": "ok"})
 }
 
@@ -69,6 +71,7 @@ func (h *LLMConfigHandler) Update(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "更新失败: " + err.Error()})
 		return
 	}
+	slog.Info("admin_update_llm", "user", userName(c), "id", id, "name", req.Name)
 	c.JSON(200, gin.H{"status": "ok"})
 }
 
@@ -83,6 +86,7 @@ func (h *LLMConfigHandler) Delete(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "删除失败"})
 		return
 	}
+	slog.Info("admin_delete_llm", "user", userName(c), "id", id)
 	c.JSON(200, gin.H{"status": "ok"})
 }
 
@@ -112,7 +116,7 @@ func (h *LLMConfigHandler) Test(c *gin.Context) {
 		return
 	}
 
-	// 保存测试参数为 JSON 供 ai_call 使用
+	// 保存测试参数为 JSON 供调用接口使用
 	paramsJSON, _ := json.Marshal(req)
 
 	c.JSON(200, gin.H{

@@ -1,5 +1,5 @@
 // ============================================================
-// DocAI Gateway - Admin Panel JavaScript
+// Doc Gateway - Admin Panel JavaScript
 // ============================================================
 
 let currentIfaceId = 0;
@@ -36,7 +36,7 @@ document.querySelectorAll('.cfg-tab').forEach(tab => {
 });
 
 // ============================================================
-// AI Interfaces CRUD
+// Interfaces (接口管理) CRUD
 // ============================================================
 async function loadInterfaces() {
     try {
@@ -69,7 +69,7 @@ async function loadInterfaces() {
 
 function showIfaceModal() {
     currentIfaceId = 0;
-    document.getElementById('ifaceModalTitle').innerHTML = '<i class="fas fa-code"></i> 新建 AI 接口';
+    document.getElementById('ifaceModalTitle').innerHTML = '<i class="fas fa-code"></i> 新建接口';
     document.getElementById('ifaceId').value = '0';
     document.getElementById('ifaceName').value = '';
     document.getElementById('ifacePath').value = '';
@@ -90,7 +90,7 @@ async function editIface(id) {
         var json = await resp.json();
         var iface = json.data;
         currentIfaceId = iface.id;
-        document.getElementById('ifaceModalTitle').innerHTML = '<i class="fas fa-code"></i> 编辑 AI 接口';
+        document.getElementById('ifaceModalTitle').innerHTML = '<i class="fas fa-code"></i> 编辑接口';
         document.getElementById('ifaceId').value = iface.id;
         document.getElementById('ifaceName').value = iface.name;
         document.getElementById('ifacePath').value = iface.path;
@@ -221,7 +221,7 @@ async function deleteIface(id) {
 }
 
 // ============================================================
-// LLM Config CRUD
+// 模型配置 CRUD
 // ============================================================
 let currentLLMId = 0;
 
@@ -247,12 +247,12 @@ async function loadLLMConfigs() {
                 '</td>' +
             '</tr>';
         }).join('');
-    } catch (err) { toast('加载模型列表失败: ' + err.message, 'error'); }
+    } catch (err) { toast('加载模型配置失败: ' + err.message, 'error'); }
 }
 
 function showLLMModal() {
     currentLLMId = 0;
-    document.getElementById('llmModalTitle').innerHTML = '<i class="fas fa-robot"></i> 新建 LLM 配置';
+    document.getElementById('llmModalTitle').innerHTML = '<i class="fas fa-robot"></i> 新建模型配置';
     document.getElementById('llmId').value = '0';
     document.getElementById('llmName').value = '';
     document.getElementById('llmURI').value = '';
@@ -270,7 +270,7 @@ async function editLLM(id) {
         var cfg = (json.data || []).find(function(c) { return c.id === id; });
         if (!cfg) return;
         currentLLMId = id;
-        document.getElementById('llmModalTitle').innerHTML = '<i class="fas fa-robot"></i> 编辑 LLM 配置';
+        document.getElementById('llmModalTitle').innerHTML = '<i class="fas fa-robot"></i> 编辑模型配置';
         document.getElementById('llmId').value = cfg.id;
         document.getElementById('llmName').value = cfg.name;
         document.getElementById('llmURI').value = cfg.api_uri;
@@ -372,7 +372,7 @@ async function deleteFile(fileId) {
 }
 
 // ============================================================
-// Call Logs
+// 日志查阅
 // ============================================================
 async function loadLogs() {
     try {
@@ -394,7 +394,7 @@ async function loadLogs() {
 }
 
 // ============================================================
-// 公文处理模拟器
+// 操作模拟
 // ============================================================
 async function loadInterfacesForSelect() {
     try {
@@ -460,7 +460,7 @@ async function oaCall() {
 
     document.getElementById('oaResult').textContent = '调用中...';
     try {
-        var resp = await fetch('/api/ai/call', {
+        var resp = await fetch('/api/call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ file_id: fileId, 'interface': ifacePath, params: params })
@@ -479,7 +479,18 @@ async function loadSysConfig() {
     try {
         var resp = await fetch('/api/v1/config'); var json = await resp.json();
         document.getElementById('sysName').value = json.data.sys.name || '';
+        var apiEnabled = json.data.api && json.data.api.auth_enabled;
+        document.getElementById('apiAuthEnabled').checked = apiEnabled || false;
+        document.getElementById('apiAuthToken').value = (json.data.api && json.data.api.auth_token) || '';
+        document.getElementById('apiTokenRow').style.display = apiEnabled ? 'flex' : '';
     } catch (_) {}
+}
+
+function generateAPIToken() {
+    var chars = '0123456789abcdef';
+    var token = '';
+    for (var i = 0; i < 32; i++) { token += chars[Math.floor(Math.random() * 16)]; }
+    document.getElementById('apiAuthToken').value = token;
 }
 
 async function saveSysConfig() {
@@ -487,7 +498,13 @@ async function saveSysConfig() {
         var resp = await fetch('/api/v1/config', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sys: { name: document.getElementById('sysName').value } })
+            body: JSON.stringify({
+                sys: { name: document.getElementById('sysName').value },
+                api: {
+                    auth_enabled: document.getElementById('apiAuthEnabled').checked,
+                    auth_token: document.getElementById('apiAuthToken').value
+                }
+            })
         });
         var json = await resp.json();
         if (json.status === 'ok') { toast('保存成功', 'success'); }
@@ -542,5 +559,5 @@ async function deleteUser(name) {
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-// Load interfaces on page init
-loadInterfaces();
+// Load LLM configs on page init
+loadLLMConfigs();

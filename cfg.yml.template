@@ -8,3 +8,7 @@ server:
 sys:
   name: "DocAI Gateway"
   base_path: ""             # 文件存储基础路径，留空用 data/
+
+doc_parser:
+  url: ""                   # 文档解析服务接口地址（解析文档并返回纯文本），留空则使用内置解析
+  token: ""                 # 调用解析服务时的认证 token（可选）

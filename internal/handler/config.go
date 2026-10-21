@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"log/slog"
+
 	"doc-ai-gateway/internal/model"
 	"doc-ai-gateway/internal/store"
 
@@ -25,10 +27,17 @@ func (h *ConfigHandler) GetConfig(c *gin.Context) {
 		name = h.cfg.Sys.Name
 	}
 
+	apiAuthEnabled, _ := h.store.GetConfig("api_auth_enabled")
+	apiAuthToken, _ := h.store.GetConfig("api_auth_token")
+
 	c.JSON(200, gin.H{
 		"data": gin.H{
 			"sys": gin.H{
 				"name": name,
+			},
+			"api": gin.H{
+				"auth_enabled": apiAuthEnabled == "1",
+				"auth_token":   apiAuthToken,
 			},
 		},
 	})
@@ -40,6 +49,10 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 		Sys struct {
 			Name string `json:"name"`
 		} `json:"sys"`
+		API struct {
+			AuthEnabled bool   `json:"auth_enabled"`
+			AuthToken   string `json:"auth_token"`
+		} `json:"api"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "参数错误"})
@@ -50,6 +63,12 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 		h.store.SetConfig("sys.name", req.Sys.Name, "系统名称")
 		h.cfg.Sys.Name = req.Sys.Name
 	}
+
+	// API 认证配置
+	h.store.SetConfig("api_auth_enabled", boolStr(req.API.AuthEnabled), "对外 API 是否启用 Bearer Token 认证")
+	h.store.SetConfig("api_auth_token", req.API.AuthToken, "对外 API 认证 Token")
+
+	slog.Info("admin_update_config", "user", userName(c), "sys_name", req.Sys.Name, "api_auth_enabled", req.API.AuthEnabled)
 
 	c.JSON(200, gin.H{"status": "ok"})
 }

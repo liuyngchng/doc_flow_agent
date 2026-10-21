@@ -73,7 +73,7 @@ func (c *Client) Chat(systemPrompt, userMessage string, temperature *float64, ma
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 
 	start := time.Now()
-	slog.Info("llm_request_start", "model", c.ModelName, "url", url)
+	slog.Info("llm_request", "model", c.ModelName, "url", url, "body", ellipsis(string(jsonData), 2000))
 	resp, err := llmHTTPClient.Do(req)
 	if err != nil {
 		slog.Error("llm_request_error", "model", c.ModelName, "error", err, "duration_ms", time.Since(start).Milliseconds())
@@ -108,9 +108,17 @@ func (c *Client) Chat(systemPrompt, userMessage string, temperature *float64, ma
 
 	if len(result.Choices) > 0 {
 		output := result.Choices[0].Message.Content
-		slog.Info("llm_request_done", "model", c.ModelName, "duration_ms", time.Since(start).Milliseconds(), "output_len", len(output))
+		slog.Info("llm_response", "model", c.ModelName, "duration_ms", time.Since(start).Milliseconds(), "output", ellipsis(output, 2000))
 		return output, nil
 	}
 
 	return "", fmt.Errorf("LLM 返回空响应")
+}
+
+// ellipsis 截断文本，超过 maxLen 加 "..."
+func ellipsis(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

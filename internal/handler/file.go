@@ -1,7 +1,14 @@
 package handler
 
 import (
+	"bytes"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -12,6 +19,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// docParserClient 文档解析服务专用 HTTP 客户端（跳过 TLS 证书验证，兼容自签证书）
+var docParserClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	},
+}
 
 // FileHandler 文件处理器
 type FileHandler struct {
@@ -74,6 +88,8 @@ func (h *FileHandler) Upload(c *gin.Context) {
 	// 异步预处理
 	go h.processFile(fileID, localPath)
 
+	slog.Info("file_upload", "user", userName(c), "file_id", fileID, "name", originalName, "type", fileType, "client_ip", c.ClientIP())
+
 	c.JSON(200, gin.H{
 		"file_id":   fileID,
 		"status":    model.FileStatusProcessing,
@@ -132,16 +148,86 @@ func (h *FileHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	slog.Info("admin_delete_file", "user", userName(c), "file_id", fileID, "name", record.OriginalName)
+
 	c.JSON(200, gin.H{"status": "ok"})
 }
 
 func (h *FileHandler) processFile(fileID, localPath string) {
-	result, err := preprocess.ExtractText(localPath)
+	var (
+		text  string
+		conf  float64
+		err   error
+	)
+
+	if h.cfg.DocParser.URL != "" {
+		text, conf, err = h.extractTextRemote(localPath)
+	} else {
+		var result *preprocess.Result
+		result, err = preprocess.ExtractText(localPath)
+		if result != nil {
+			text, conf = result.Text, result.OCRConfidence
+		}
+	}
+
 	if err != nil {
 		h.store.UpdateFileStatus(fileID, model.FileStatusFailed, err.Error())
 		return
 	}
-	h.store.UpdateFileText(fileID, result.Text, len(result.Text), result.OCRConfidence)
+	h.store.UpdateFileText(fileID, text, len(text), conf)
+}
+
+// extractTextRemote 调用外部文档解析服务（multipart/form-data），获取纯文本内容
+func (h *FileHandler) extractTextRemote(localPath string) (string, float64, error) {
+	f, err := os.Open(localPath)
+	if err != nil {
+		return "", 0, fmt.Errorf("打开文件失败: %w", err)
+	}
+	defer f.Close()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	part, err := writer.CreateFormFile("file", filepath.Base(localPath))
+	if err != nil {
+		return "", 0, fmt.Errorf("创建 form 字段失败: %w", err)
+	}
+	if _, err := io.Copy(part, f); err != nil {
+		return "", 0, fmt.Errorf("写入文件数据失败: %w", err)
+	}
+	writer.Close()
+
+	req, err := http.NewRequest(http.MethodPost, h.cfg.DocParser.URL, &body)
+	if err != nil {
+		return "", 0, fmt.Errorf("创建解析请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if h.cfg.DocParser.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+h.cfg.DocParser.Token)
+	}
+
+	resp, err := docParserClient.Do(req)
+	if err != nil {
+		return "", 0, fmt.Errorf("调用文档解析服务失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", 0, fmt.Errorf("读取解析响应失败: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", 0, fmt.Errorf("文档解析服务返回错误状态码 %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var parsed struct {
+		Text          string  `json:"text"`
+		OCRConfidence float64 `json:"ocr_confidence"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return "", 0, fmt.Errorf("解析 JSON 响应失败: %w", err)
+	}
+	return parsed.Text, parsed.OCRConfidence, nil
 }
 
 func (h *FileHandler) basePath() string {

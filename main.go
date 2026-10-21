@@ -116,13 +116,13 @@ func main() {
 		v1.DELETE("/llm-configs/:id", h.LLMConfig.Delete)
 		v1.PUT("/llm-configs/:id/default", h.LLMConfig.SetDefault)
 
-		// AI 接口管理
-		v1.GET("/interfaces", h.AIInterface.List)
-		v1.GET("/interfaces/:id", h.AIInterface.Get)
-		v1.POST("/interfaces", h.AIInterface.Create)
-		v1.PUT("/interfaces/:id", h.AIInterface.Update)
-		v1.DELETE("/interfaces/:id", h.AIInterface.Delete)
-		v1.POST("/interfaces/:id/test", h.AIInterface.Test)
+		// 接口管理
+		v1.GET("/interfaces", h.Interface.List)
+		v1.GET("/interfaces/:id", h.Interface.Get)
+		v1.POST("/interfaces", h.Interface.Create)
+		v1.PUT("/interfaces/:id", h.Interface.Update)
+		v1.DELETE("/interfaces/:id", h.Interface.Delete)
+		v1.POST("/interfaces/:id/test", h.Interface.Test)
 
 		// 文件管理
 		v1.GET("/files", h.File.List)
@@ -150,21 +150,8 @@ func main() {
 	r.POST("/api/files/upload", h.File.Upload)
 	r.GET("/api/files/status/:file_id", h.File.Status)
 
-	// 电子公文工作流调用接口（可以加 simple Bearer token，也可不加）
-	oaAPI := r.Group("/api/ai")
-	oaAPI.Use(handler.CallLogMiddleware(metaStore))
-	{
-		oaAPI.POST("/call", h.AICall.Call)
-	}
-
-	// ============================================================
-	// /open_api/ — Bearer Token 认证接口（可选）
-	// ============================================================
-	openAPI := r.Group("/open_api")
-	openAPI.Use(h.Auth.BearerAuthMiddleware())
-	{
-		openAPI.POST("/ai/call", h.AICall.Call)
-	}
+	// 电子公文工作流调用接口（可选 Bearer token，由管理员在后台配置开关）
+	r.POST("/api/call", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
 
 	// 优雅退出
 	go func() {

@@ -30,8 +30,9 @@ type User struct {
 
 // Config 运行配置
 type Config struct {
-	Server ServerConfig `yaml:"server"`
-	Sys    SysConfig    `yaml:"sys"`
+	Server    ServerConfig    `yaml:"server"`
+	Sys       SysConfig       `yaml:"sys"`
+	DocParser DocParserConfig `yaml:"doc_parser"`
 }
 
 // ServerConfig 服务器配置
@@ -44,6 +45,12 @@ type ServerConfig struct {
 type SysConfig struct {
 	Name     string `yaml:"name"`
 	BasePath string `yaml:"base_path"`
+}
+
+// DocParserConfig 文档解析服务配置
+type DocParserConfig struct {
+	URL   string `yaml:"url"`   // 文档解析接口地址，如 http://parser:9090/parse
+	Token string `yaml:"token"` // 调用解析接口时携带的认证 token（可选）
 }
 
 // ============================================================
@@ -65,11 +72,11 @@ type LLMConfig struct {
 }
 
 // ============================================================
-// AI 接口配置
+// 接口配置
 // ============================================================
 
-// AIInterface 管理员配置的 AI 接口
-type AIInterface struct {
+// InterfaceConfig 管理员配置的接口
+type InterfaceConfig struct {
 	ID             int64    `json:"id"`
 	Name           string   `json:"name"`
 	Path           string   `json:"path"`
