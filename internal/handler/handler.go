@@ -28,7 +28,7 @@ func New(cfg *model.Config, st store.MetaStore) *Handler {
 		File:      NewFileHandler(cfg, st),
 		Interface: NewInterfaceHandler(st),
 		LLMConfig: NewLLMConfigHandler(st),
-		Call:      NewCallHandler(st),
+		Call:      NewCallHandler(st, cfg),
 		CallLog:   NewCallLogHandler(st),
 		User:      NewUserHandler(st, auth),
 	}

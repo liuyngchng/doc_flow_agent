@@ -87,7 +87,7 @@
                 <!-- 接口管理 -->
                 <div class="cfg-section" id="section-interfaces">
                     <h2><i class="fas fa-code"></i> 接口管理</h2>
-                    <p style="color:#888;margin-bottom:16px;">配置接口，定义提示词模板、输入参数和输出格式。电子公文工作流通过 <code>/api/call</code> 调用。</p>
+                    <p style="color:#888;margin-bottom:16px;">配置接口，定义提示词模板。电子公文工作流通过 <code>/api/call/{path}</code> 调用。</p>
                     <button class="cfg-btn cfg-btn-save" onclick="showIfaceModal()" style="margin-bottom:16px;">
                         <i class="fas fa-plus"></i> 新建接口
                     </button>
@@ -109,7 +109,8 @@
                                     </div>
                                     <div class="form-g" style="flex:1;min-width:200px;">
                                         <label>接口路径 <span style="color:#e53935;">*</span></label>
-                                        <input type="text" id="ifacePath" required placeholder="如：receive-type" style="width:100%;">
+                                        <input type="text" id="ifacePath" required placeholder="如：v1/document/classify" style="width:100%;">
+                                        <small style="color:#888;">调用地址: <code>/api/call/{path}</code></small>
                                     </div>
                                 </div>
                                 <div class="form-g">
@@ -181,34 +182,31 @@
                 <!-- 操作模拟 -->
                 <div class="cfg-section" id="section-oa-sim">
                     <h2><i class="fas fa-flask"></i> 操作模拟</h2>
-                    <p style="color:#888;margin-bottom:16px;">模拟上传文件并调用接口，用于测试和体验。</p>
+                    <p style="color:#888;margin-bottom:16px;">模拟电子公文系统调用接口。输入完整 JSON（含 <code>file_url</code> 字段），系统自动下载解析文件。</p>
 
                     <div class="oa-step">
-                        <h3>步骤 1: 上传文件</h3>
-                        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-                            <input type="file" id="oaFile" style="padding:8px;">
-                            <button class="cfg-btn cfg-btn-save" onclick="oaUpload()">
-                                <i class="fas fa-upload"></i> 上传
-                            </button>
-                        </div>
-                        <div id="oaUploadResult" style="margin-top:8px;font-size:0.85rem;"></div>
-                    </div>
-
-                    <div class="oa-step">
-                        <h3>步骤 2: 调用接口</h3>
+                        <h3>调用接口</h3>
                         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
                             <label>接口: </label>
                             <select id="oaInterface" style="padding:10px 14px;border:2px solid #e0e3e8;border-radius:8px;min-width:200px;"></select>
-                            <label>File ID: </label>
-                            <input type="text" id="oaFileId" placeholder="从上一步获取" style="padding:10px 14px;border:2px solid #e0e3e8;border-radius:8px;width:200px;">
                             <button class="cfg-btn cfg-btn-save" onclick="oaCall()">
                                 <i class="fas fa-play"></i> 调用
                             </button>
                         </div>
-                        <details style="margin-top:8px;">
-                            <summary style="cursor:pointer;color:#4b6cb7;">额外参数 (JSON)</summary>
-                            <textarea id="oaParams" rows="4" style="width:100%;max-width:500px;font-family:monospace;font-size:0.85rem;margin-top:4px;" placeholder='{"node_name":"收文登记","form_type":""}'></textarea>
-                        </details>
+                    </div>
+
+                    <div class="oa-step">
+                        <h3>请求体 (JSON)</h3>
+                        <textarea id="oaParams" rows="16" style="width:100%;font-family:monospace;font-size:0.85rem;margin-top:4px;" placeholder='{
+  "linkid": "doc_20261020_0001",
+  "process_type": "company_receive",
+  "form_data": {"title": ""},
+  "main_body_url": "https://edoc.example.com/api/v1/files/body_001",
+  "attachments": [
+    {"name": "通知.pdf", "file_url": "https://edoc.example.com/api/v1/files/att_001", "type": "pdf"}
+  ],
+  "current_step": "收文登记"
+}'></textarea>
                     </div>
 
                     <div class="oa-step">
@@ -227,7 +225,7 @@
 
                     <h3 style="margin-top:24px;border-top:1px solid #e0e3e8;padding-top:20px;">对外 API 认证</h3>
                     <p style="color:#888;margin-bottom:12px;font-size:0.85rem;">
-                        启用后调用 <code>/api/call</code> 必须携带 <code>Authorization: Bearer &lt;token&gt;</code> 头。
+                        启用后调用 <code>/api/call/{path}</code> 必须携带 <code>X-Api-Key: &lt;token&gt;</code> 头。
                     </p>
                     <div style="margin-bottom:12px;">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">

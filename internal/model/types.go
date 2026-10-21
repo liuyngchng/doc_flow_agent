@@ -1,6 +1,36 @@
 package model
 
 // ============================================================
+// 业务错误码（与电子公文流转接口文档 V1.0 对齐）
+// ============================================================
+const (
+	ErrCodeSuccess        = 0
+	ErrCodeParamError     = 1001 // 参数错误
+	ErrCodeFileNotFound   = 1002 // 文件不存在
+	ErrCodeFileUnreadable = 1003 // 文件不可读
+	ErrCodeAgentFail      = 1004 // 智能体分析失败（需人工）
+	ErrCodeTimeout        = 2001 // 接口超时
+	ErrCodeInternal       = 5000 // 内部错误
+)
+
+// APIResponse 通用 API 响应（对齐电子公文流转接口文档格式）
+type APIResponse struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}
+
+// NewSuccessResponse 成功响应
+func NewSuccessResponse(data interface{}) APIResponse {
+	return APIResponse{Code: ErrCodeSuccess, Message: "success", Data: data}
+}
+
+// NewErrorResponse 错误响应
+func NewErrorResponse(code int, message string) APIResponse {
+	return APIResponse{Code: code, Message: message, Data: nil}
+}
+
+// ============================================================
 // 角色常量
 // ============================================================
 const (

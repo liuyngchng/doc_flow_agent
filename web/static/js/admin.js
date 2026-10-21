@@ -52,7 +52,7 @@ async function loadInterfaces() {
             return '<tr>' +
                 '<td>' + iface.id + '</td>' +
                 '<td><strong>' + esc(iface.name) + '</strong></td>' +
-                '<td><code>' + esc(iface.path) + '</code></td>' +
+                '<td><code>/api/call/' + esc(iface.path) + '</code></td>' +
                 '<td>' + (iface.enabled ? '<span class="badge badge-success">启用</span>' : '<span class="badge badge-gray">禁用</span>') + '</td>' +
                 '<td>v' + iface.version + '</td>' +
                 '<td>' +
@@ -407,63 +407,19 @@ async function loadInterfacesForSelect() {
     } catch (_) {}
 }
 
-async function oaUpload() {
-    var fileInput = document.getElementById('oaFile');
-    if (!fileInput.files[0]) { toast('请选择文件', 'error'); return; }
-    var formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    formData.append('biz_id', 'SIM-' + Date.now());
-
-    try {
-        document.getElementById('oaUploadResult').innerHTML = '上传中...';
-        var resp = await fetch('/api/files/upload', { method: 'POST', body: formData });
-        var json = await resp.json();
-        var resultDiv = document.getElementById('oaUploadResult');
-        if (json.file_id) {
-            resultDiv.innerHTML = '<span style="color:#2e7d32;">✓ 上传成功!</span> File ID: <code>' + json.file_id + '</code> 状态: ' + json.status + ' 类型: ' + json.file_type;
-            document.getElementById('oaFileId').value = json.file_id;
-            // Poll status
-            pollFileStatus(json.file_id);
-        } else {
-            resultDiv.innerHTML = '<span style="color:#c62828;">✗ 上传失败: ' + (json.error || '未知错误') + '</span>';
-        }
-    } catch (err) {
-        document.getElementById('oaUploadResult').innerHTML = '<span style="color:#c62828;">✗ ' + err.message + '</span>';
-    }
-}
-
-async function pollFileStatus(fileId) {
-    var maxPolls = 30;
-    for (var i = 0; i < maxPolls; i++) {
-        try {
-            var resp = await fetch('/api/files/status/' + fileId);
-            var json = await resp.json();
-            if (json.status === 'ready') {
-                document.getElementById('oaUploadResult').innerHTML += '<br><span style="color:#2e7d32;">✓ 预处理完成!</span> 文本长度: ' + json.text_length;
-                return;
-            } else if (json.status === 'failed') {
-                document.getElementById('oaUploadResult').innerHTML += '<br><span style="color:#c62828;">✗ 预处理失败: ' + (json.error_message || '未知') + '</span>';
-                return;
-            }
-        } catch (_) {}
-        await sleep(2000);
-    }
-}
-
-async function oaCall() {
-    var fileId = document.getElementById('oaFileId').value.trim();
+async function loadInterfacesForSelect() {
     var ifacePath = document.getElementById('oaInterface').value;
-    var params = {};
-    try { params = JSON.parse(document.getElementById('oaParams').value || '{}'); } catch(e) { toast('参数 JSON 格式错误', 'error'); return; }
+    var body = {};
+    try { body = JSON.parse(document.getElementById('oaParams').value || '{}'); } catch(e) { toast('参数 JSON 格式错误', 'error'); return; }
 
-    if (!fileId || !ifacePath) { toast('请填写 File ID 和选择接口', 'error'); return; }
+    if (!ifacePath) { toast('请选择接口', 'error'); return; }
 
     document.getElementById('oaResult').textContent = '调用中...';
     try {
-        var resp = await fetch('/api/call', {
+        var resp = await fetch('/api/call/' + ifacePath, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_id: fileId, 'interface': ifacePath, params: params })
+            body: JSON.stringify(body)
         });
         var json = await resp.json();
         document.getElementById('oaResult').textContent = JSON.stringify(json, null, 2);

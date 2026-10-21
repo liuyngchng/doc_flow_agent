@@ -224,7 +224,10 @@ func (h *AuthHandler) BearerAuthMiddleware() gin.HandlerFunc {
 }
 
 // APITokenMiddleware 对外 API 认证中间件
-// 管理员可配置开关和 token：api_auth_enabled=1 时校验 Bearer token，否则直接放行
+// 支持两种认证方式：
+//   1. X-Api-Key: {api_key} — 电子公文系统调用
+//   2. Authorization: Bearer {token} — 兼容旧方式
+// 管理员可配置开关和 token：api_auth_enabled=1 时校验，否则直接放行
 func (h *AuthHandler) APITokenMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		enabled, _ := h.store.GetConfig("api_auth_enabled")
@@ -239,16 +242,29 @@ func (h *AuthHandler) APITokenMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// 优先检查 X-Api-Key header
+		apiKey := c.GetHeader("X-Api-Key")
+		if apiKey != "" {
+			if apiKey != expectedToken {
+				c.JSON(http.StatusUnauthorized, model.NewErrorResponse(model.ErrCodeParamError, "无效的 X-Api-Key"))
+				c.Abort()
+				return
+			}
+			c.Next()
+			return
+		}
+
+		// 回退 Bearer token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "缺少 Authorization header"})
+			c.JSON(http.StatusUnauthorized, model.NewErrorResponse(model.ErrCodeParamError, "缺少 X-Api-Key 或 Authorization header"))
 			c.Abort()
 			return
 		}
 
 		token := authHeader[7:]
 		if token != expectedToken {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的 token"})
+			c.JSON(http.StatusUnauthorized, model.NewErrorResponse(model.ErrCodeParamError, "无效的 token"))
 			c.Abort()
 			return
 		}

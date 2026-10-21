@@ -150,8 +150,8 @@ func main() {
 	r.POST("/api/files/upload", h.File.Upload)
 	r.GET("/api/files/status/:file_id", h.File.Status)
 
-	// 电子公文工作流调用接口（可选 Bearer token，由管理员在后台配置开关）
-	r.POST("/api/call", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
+	// 电子公文工作流调用接口（支持 X-Api-Key 或 Bearer token）
+	r.POST("/api/call/*interfacePath", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
 
 	// 优雅退出
 	go func() {
