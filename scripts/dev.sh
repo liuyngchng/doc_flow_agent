@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-IMAGE="doc-ai-gateway-build:latest"
+IMAGE="doc_flow_agent-build:latest"
 
 ensure_go_tarball() {
   GO_VERSION="1.24.13"

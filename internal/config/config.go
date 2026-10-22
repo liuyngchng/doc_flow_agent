@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"doc-ai-gateway/internal/model"
+	"doc_flow_agent/internal/model"
 
 	"gopkg.in/yaml.v3"
 )
@@ -44,7 +44,7 @@ func defaultConfig() *model.Config {
 			KeyFile:  "dist/key.pem",
 		},
 		Sys: model.SysConfig{
-			Name:     "Doc Gateway",
+			Name:     "doc_flow_agent",
 			BasePath: "data",
 		},
 		DocParser: model.DocParserConfig{
@@ -58,7 +58,7 @@ func applyDefaults(cfg *model.Config) {
 		cfg.Server.Port = 20001
 	}
 	if cfg.Sys.Name == "" {
-		cfg.Sys.Name = "Doc Gateway"
+		cfg.Sys.Name = "doc_flow_agent"
 	}
 	if cfg.Sys.BasePath == "" {
 		cfg.Sys.BasePath = "data"

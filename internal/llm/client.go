@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"doc-ai-gateway/internal/model"
+	"doc_flow_agent/internal/model"
 )
 
 var llmHTTPClient = &http.Client{

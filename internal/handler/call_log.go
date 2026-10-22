@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"doc-ai-gateway/internal/store"
+	"doc_flow_agent/internal/store"
 
 	"github.com/gin-gonic/gin"
 )

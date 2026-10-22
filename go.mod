@@ -1,4 +1,4 @@
-module doc-ai-gateway
+module doc_flow_agent
 
 go 1.24.1
 

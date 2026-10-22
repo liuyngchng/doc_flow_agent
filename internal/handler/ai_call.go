@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"doc-ai-gateway/internal/llm"
-	"doc-ai-gateway/internal/model"
-	"doc-ai-gateway/internal/preprocess"
-	"doc-ai-gateway/internal/store"
+	"doc_flow_agent/internal/llm"
+	"doc_flow_agent/internal/model"
+	"doc_flow_agent/internal/preprocess"
+	"doc_flow_agent/internal/store"
 
 	"github.com/gin-gonic/gin"
 )
@@ -78,7 +78,7 @@ func (h *CallHandler) Call(c *gin.Context) {
 	files := h.downloadAllFileURLs(rawBody)
 
 	// 5. 渲染 prompt
-	systemPrompt := "你是一个电子公文处理助手。请严格按照要求的 JSON 格式返回结果，不要包含任何其他文字。"
+	systemPrompt := h.buildSystemPrompt(iface)
 	userPrompt, err := h.renderPrompt(iface, string(bodyBytes), files)
 	if err != nil {
 		c.JSON(400, model.NewErrorResponse(model.ErrCodeParamError, err.Error()))
@@ -512,6 +512,17 @@ func (h *CallHandler) getLLMConfig(iface *model.InterfaceConfig) (*model.LLMConf
 		return nil, fmt.Errorf("未配置 LLM 模型，请先在管理后台配置默认模型")
 	}
 	return cfg, nil
+}
+
+// buildSystemPrompt 构造 system prompt，将输出 schema 注入其中，引导 LLM 按指定 JSON 结构返回
+func (h *CallHandler) buildSystemPrompt(iface *model.InterfaceConfig) string {
+	prompt := "你是一个电子公文处理助手。请严格按照要求的 JSON 格式返回结果，不要包含任何其他文字。"
+
+	if schema := strings.TrimSpace(iface.OutputSchema); schema != "" && schema != "{}" {
+		prompt += "\n\n请严格按以下 JSON Schema 返回结果：\n```json\n" + schema + "\n```"
+	}
+
+	return prompt
 }
 
 // wrapOutput 将 LLM 原始输出包装为统一响应格式

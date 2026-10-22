@@ -19,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-IMAGE="doc-ai-gateway-build:latest"
+IMAGE="doc_flow_agent-build:latest"
 
 # ── Usage ───────────────────────────────────────────────────────
 usage() {
@@ -30,7 +30,7 @@ usage() {
   (默认)                  编译 Linux 二进制 (Docker)
   local                   编译 Linux 二进制 (本地 Go)
   windows                 交叉编译 Windows .exe (本地 Go)
-  docker                  构建 Docker 生产镜像 (需先有 dist/doc-ai-gateway)
+  docker                  构建 Docker 生产镜像 (需先有 dist/doc_flow_agent)
   -h | --help             显示本帮助并退出
 
 代理参数（可选，不带 = 时继承环境变量）:
@@ -106,7 +106,7 @@ ensure_cert() {
   mkdir -p "$CERT_DIR"
   echo "=== 生成 HTTPS 自签证书 ==="
   openssl req -x509 -newkey rsa:2048 -keyout "$KEY_FILE" -out "$CERT_FILE" \
-    -days 3650 -nodes -subj "/CN=localhost/O=DocAI Gateway"
+    -days 3650 -nodes -subj "/CN=localhost/O=doc_flow_agent"
   echo "  证书: $CERT_FILE"
   echo "  私钥: $KEY_FILE"
   echo "=== 证书生成完成 ==="
@@ -140,32 +140,32 @@ ensure_go_tarball() {
 # build_windows — 本地交叉编译 Windows .exe + 打包 zip
 # ================================================================
 build_windows() {
-    echo "=== Building doc-ai-gateway.exe (Windows amd64) ==="
+    echo "=== Building doc_flow_agent.exe (Windows amd64) ==="
     ensure_cert
-    rm -rf dist/doc-ai-gateway.exe dist/doc-ai-gateway-windows-amd64*
+    rm -rf dist/doc_flow_agent.exe dist/doc_flow_agent-windows-amd64*
 
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-        go build -mod=mod -ldflags="-s -w -H windowsgui" -o dist/doc-ai-gateway.exe .
+        go build -mod=mod -buildvcs=false -ldflags="-s -w -H windowsgui" -o dist/doc_flow_agent.exe .
 
-    echo "  dist/doc-ai-gateway.exe ($(du -h dist/doc-ai-gateway.exe | cut -f1))"
+    echo "  dist/doc_flow_agent.exe ($(du -h dist/doc_flow_agent.exe | cut -f1))"
 
     # 打包目录
-    local pkg="dist/doc-ai-gateway-windows-amd64"
+    local pkg="dist/doc_flow_agent-windows-amd64"
     rm -rf "$pkg" && mkdir -p "$pkg"
 
-    cp dist/doc-ai-gateway.exe "$pkg/"
+    cp dist/doc_flow_agent.exe "$pkg/"
     cp cfg.yml.template "$pkg/cfg.yml"
     cp scripts/windows-readme.txt "$pkg/README.txt"
 
     # 打包 zip
-    cd dist && rm -f doc-ai-gateway-windows-amd64.zip && \
-        zip -rq "doc-ai-gateway-windows-amd64.zip" "doc-ai-gateway-windows-amd64"
+    cd dist && rm -f doc_flow_agent-windows-amd64.zip && \
+        zip -rq "doc_flow_agent-windows-amd64.zip" "doc_flow_agent-windows-amd64"
     cd "$SCRIPT_DIR"
 
-    echo "  dist/doc-ai-gateway-windows-amd64.zip ($(du -h dist/doc-ai-gateway-windows-amd64.zip | cut -f1))"
+    echo "  dist/doc_flow_agent-windows-amd64.zip ($(du -h dist/doc_flow_agent-windows-amd64.zip | cut -f1))"
 
     # 清理中间文件
-    rm -rf "$pkg" dist/doc-ai-gateway.exe
+    rm -rf "$pkg" dist/doc_flow_agent.exe
     echo "=== Done ==="
 }
 
@@ -173,30 +173,30 @@ build_windows() {
 # build_linux_local — 本地 Go 编译 Linux 二进制 + 打包 tar
 # ================================================================
 build_linux_local() {
-    echo "=== Building doc-ai-gateway (Linux amd64, local Go) ==="
+    echo "=== Building doc_flow_agent (Linux amd64, local Go) ==="
     ensure_cert
-    rm -rf dist/doc-ai-gateway dist/doc-ai-gateway-linux-amd64*
+    rm -rf dist/doc_flow_agent dist/doc_flow_agent-linux-amd64*
 
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-        go build -mod=mod -ldflags="-s -w" -o dist/doc-ai-gateway .
+        go build -mod=mod -buildvcs=false -ldflags="-s -w" -o dist/doc_flow_agent .
 
-    echo "  dist/doc-ai-gateway ($(du -h dist/doc-ai-gateway | cut -f1))"
+    echo "  dist/doc_flow_agent ($(du -h dist/doc_flow_agent | cut -f1))"
 
     # 打包目录
-    local pkg="dist/doc-ai-gateway-linux-amd64"
+    local pkg="dist/doc_flow_agent-linux-amd64"
     rm -rf "$pkg" && mkdir -p "$pkg"
 
-    cp dist/doc-ai-gateway "$pkg/"
+    cp dist/doc_flow_agent "$pkg/"
     cp cfg.yml.template "$pkg/cfg.yml"
     cp scripts/windows-readme.txt "$pkg/README.txt"
 
     # 打包 tar
-    tar -cf "dist/doc-ai-gateway-linux-amd64.tar" -C dist "doc-ai-gateway-linux-amd64"
+    tar -cf "dist/doc_flow_agent-linux-amd64.tar" -C dist "doc_flow_agent-linux-amd64"
 
-    echo "  dist/doc-ai-gateway-linux-amd64.tar ($(du -h dist/doc-ai-gateway-linux-amd64.tar | cut -f1))"
+    echo "  dist/doc_flow_agent-linux-amd64.tar ($(du -h dist/doc_flow_agent-linux-amd64.tar | cut -f1))"
 
     # 清理中间文件
-    rm -rf "$pkg" dist/doc-ai-gateway
+    rm -rf "$pkg" dist/doc_flow_agent
     echo "=== Done ==="
 }
 
@@ -222,7 +222,7 @@ build_linux_docker() {
     mkdir -p "$gocache" "$gomodcache" dist
 
     echo ""
-    echo "=== Building doc-ai-gateway (Linux amd64, Docker) ==="
+    echo "=== Building doc_flow_agent (Linux amd64, Docker) ==="
 
     docker run --rm \
         -v "$SCRIPT_DIR":/workspace \
@@ -237,24 +237,26 @@ build_linux_docker() {
         -e GOOS=linux \
         -e GOARCH=amd64 \
         "$IMAGE" \
-        go build -mod=mod -ldflags="-s -w" -o dist/doc-ai-gateway .
+        go build -mod=mod -buildvcs=false -ldflags="-s -w" -o dist/doc_flow_agent .
 
-    echo "  dist/doc-ai-gateway ($(du -h "$SCRIPT_DIR/dist/doc-ai-gateway" | cut -f1))"
+    echo "  dist/doc_flow_agent ($(du -h "$SCRIPT_DIR/dist/doc_flow_agent" | cut -f1))"
 
     # 构建生产镜像
     echo ""
-    echo "=== Building production Docker image doc-ai-gateway:latest ==="
+    echo "=== Building production Docker image doc_flow_agent:latest ==="
     docker build "${DOCKER_BUILD_ARGS[@]+"${DOCKER_BUILD_ARGS[@]}"}" \
-        -t doc-ai-gateway:latest -f scripts/Dockerfile.server .
+        -t doc_flow_agent:latest -f scripts/Dockerfile.server .
 
     echo ""
     echo "=== Done ==="
-    echo "  Docker image: doc-ai-gateway:latest"
+    echo "  Docker image: doc_flow_agent:latest"
     echo "  Run with:"
     echo "    # data/ 包含数据库 cfg.db、上传文件、日志，容器停后数据不丢"
-    echo "    docker run -d --rm --name doc-ai-gateway -p 20001:20001 \\"
+    echo "    docker run -d --rm --name doc_flow_agent -p 20001:20001 \\"
     echo "      -v \$(pwd)/data:/app/data \\"
-    echo "      doc-ai-gateway:latest"
+    echo "      doc_flow_agent:latest"
+    echo "    # 查看运行日志"
+    echo "    docker logs -f doc_flow_agent"
 }
 
 case "${MODE:-docker}" in

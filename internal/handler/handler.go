@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"doc-ai-gateway/internal/model"
-	"doc-ai-gateway/internal/store"
+	"doc_flow_agent/internal/model"
+	"doc_flow_agent/internal/store"
 )
 
 // Handler 聚合所有处理器

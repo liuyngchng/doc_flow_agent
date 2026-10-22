@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strconv"
 
-	"doc-ai-gateway/internal/model"
-	"doc-ai-gateway/internal/store"
+	"doc_flow_agent/internal/model"
+	"doc_flow_agent/internal/store"
 
 	"github.com/gin-gonic/gin"
 )

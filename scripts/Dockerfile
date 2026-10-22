@@ -1,5 +1,5 @@
 # ================================================================
-# doc-ai-gateway build image (ubuntu:24.04 + Go toolchain).
+# doc_flow_agent build image (ubuntu:24.04 + Go toolchain).
 #
 # Go is NOT downloaded inside the image — the tarball is cached on
 # the host and COPY'd in at build time (see build.sh).

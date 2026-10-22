@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"doc-ai-gateway/internal/model"
+	"doc_flow_agent/internal/model"
 
 	_ "modernc.org/sqlite"
 )

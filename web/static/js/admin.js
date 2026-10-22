@@ -407,7 +407,7 @@ async function loadInterfacesForSelect() {
     } catch (_) {}
 }
 
-async function loadInterfacesForSelect() {
+async function oaCall() {
     var ifacePath = document.getElementById('oaInterface').value;
     var body = {};
     try { body = JSON.parse(document.getElementById('oaParams').value || '{}'); } catch(e) { toast('参数 JSON 格式错误', 'error'); return; }
@@ -416,13 +416,16 @@ async function loadInterfacesForSelect() {
 
     document.getElementById('oaResult').textContent = '调用中...';
     try {
+        var start = Date.now();
         var resp = await fetch('/api/v1/' + ifacePath, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
+        var elapsed = Date.now() - start;
         var json = await resp.json();
-        document.getElementById('oaResult').textContent = JSON.stringify(json, null, 2);
+        var result = JSON.stringify(json, null, 2);
+        document.getElementById('oaResult').textContent = result + '\n\n--- 耗时: ' + elapsed + 'ms ---';
     } catch (err) {
         document.getElementById('oaResult').textContent = '调用失败: ' + err.message;
     }

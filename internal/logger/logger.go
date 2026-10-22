@@ -20,7 +20,7 @@ import (
 const SourceWidth = 24
 
 // modulePrefix 模块名前缀，从完整函数名中剥离
-const modulePrefix = "doc-ai-gateway/"
+const modulePrefix = "doc_flow_agent/"
 
 // customHandler 自定义日志格式
 // 格式: 2026-10-15 14:03:41.238 WARN  [handler/auth.go:123] auth_auto_generated_key note=xxx

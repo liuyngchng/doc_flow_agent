@@ -1,4 +1,4 @@
-# DocAI Gateway - 文档 AI 智能网关
+# doc_flow_agent - 文档 AI 智能网关
 
 面向 电子公文工作流的通用 AI 网关，将文件预处理与可配置的 LLM 调用接口解耦。
 
@@ -12,7 +12,7 @@
 ## 架构
 
 ```
-电子公文工作流 ──HTTP──> doc-ai-gateway ──> LLM API
+电子公文工作流 ──HTTP──> doc_flow_agent ──> LLM API
                      │
                      ├── 文件预处理 (docx/pdf/xlsx 文本提取)
                      ├── 可配置 AI 接口 (提示词模板 + 占位符 + Schema)
@@ -25,8 +25,8 @@
 
 ```bash
 scripts/build.bat          # 一键编译
-cd dist/doc-ai-gateway-windows-amd64
-doc-ai-gateway.exe         # 双击运行
+cd dist/doc_flow_agent-windows-amd64
+doc_flow_agent.exe         # 双击运行
 ```
 
 访问 https://localhost:20001/admin ，默认账号 `admin` / `admin`。
@@ -38,7 +38,7 @@ doc-ai-gateway.exe         # 双击运行
 
 ```bash
 scripts/build.sh           # 编译 + 构建 Docker 镜像
-docker run -p 20001:20001 -v $(pwd)/data:/app/data doc-ai-gateway:latest
+docker run -p 20001:20001 -v $(pwd)/data:/app/data doc_flow_agent:latest
 ```
 
 ## 对外 API（电子公文工作流调用）
@@ -162,7 +162,7 @@ curl -k -X POST https://localhost:20001/api/ai/call \
 ## 项目结构
 
 ```
-doc-ai-gateway/
+doc_flow_agent/
 ├── main.go                    # 入口
 ├── internal/
 │   ├── config/                # 配置加载

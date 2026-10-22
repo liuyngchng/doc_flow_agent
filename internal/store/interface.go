@@ -1,6 +1,6 @@
 package store
 
-import "doc-ai-gateway/internal/model"
+import "doc_flow_agent/internal/model"
 
 // MetaStore 元数据存储接口
 type MetaStore interface {

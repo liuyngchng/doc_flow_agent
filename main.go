@@ -11,10 +11,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"doc-ai-gateway/internal/config"
-	"doc-ai-gateway/internal/handler"
-	"doc-ai-gateway/internal/logger"
-		"doc-ai-gateway/internal/store"
+	"doc_flow_agent/internal/config"
+	"doc_flow_agent/internal/handler"
+	"doc_flow_agent/internal/logger"
+		"doc_flow_agent/internal/store"
 
 	"github.com/gin-gonic/gin"
 )
