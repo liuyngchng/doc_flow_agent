@@ -24,7 +24,7 @@ var webFS embed.FS
 
 func main() {
 	// 加载配置
-	cfg, err := config.Load("cfg.yml")
+	cfg, err := config.Load("data/cfg.yml")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "加载配置文件失败: %v\n", err)
 		os.Exit(1)
@@ -37,7 +37,6 @@ func main() {
 	}
 
 	// 初始化 SQLite 存储 — 放在 data/ 下，容器只需挂载这一个目录
-	os.MkdirAll("data", 0755)
 	dbPath := "data/cfg.db"
 	metaStore, err := store.NewSQLiteStore(dbPath)
 	if err != nil {

@@ -34,9 +34,9 @@ WORKDIR /app
 COPY dist/doc-ai-gateway /app/doc-ai-gateway
 COPY dist/cert.pem /app/dist/cert.pem
 COPY dist/key.pem /app/dist/key.pem
-COPY cfg.yml.template /app/cfg.yml
 
 # 数据库和数据目录由 volume 挂载提供
+# cfg.yml 也从 data/ 读取（首次运行自动生成默认配置）
 RUN mkdir -p /app/data/files /app/data/logs
 
 ENV PORT=20001
