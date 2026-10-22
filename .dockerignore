@@ -10,9 +10,11 @@
 build/gocache
 build/gomodcache
 
-# 编译产物（Dockerfile.server 需 dist/doc-ai-gateway，其余排除）
+# 编译产物（Dockerfile.server 需 dist/doc-ai-gateway + 证书，其余排除）
 dist/*
 !dist/doc-ai-gateway
+!dist/cert.pem
+!dist/key.pem
 
 # 运行时数据（不进入镜像）
 data
