@@ -47,6 +47,11 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
+	if err := validatePasswordStrength(req.UserPwd); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
 	hash, err := hashPassword(req.UserPwd)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "加密失败"})
@@ -93,6 +98,11 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	if err := validatePasswordStrength(req.NewPwd); err != nil {
+		c.JSON(400, gin.H{"error": "新密码: " + err.Error()})
+		return
+	}
+
 	userName, _ := GetUserInfo(c)
 	user, err := h.store.GetUser(userName)
 	if err != nil || user == nil {
@@ -136,6 +146,11 @@ func (h *UserHandler) Register(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.UserName == "" || req.UserPwd == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名和密码不能为空"})
+		return
+	}
+
+	if err := validatePasswordStrength(req.UserPwd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

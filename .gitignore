@@ -4,6 +4,7 @@ build/
 *.exe
 *.test
 *.out
+doc_flow_agent
 
 # 运行时数据
 cfg.db

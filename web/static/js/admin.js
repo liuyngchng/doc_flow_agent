@@ -30,6 +30,7 @@ document.querySelectorAll('.cfg-tab').forEach(tab => {
         else if (this.dataset.tab === 'files') loadFiles();
         else if (this.dataset.tab === 'logs') loadLogs();
         else if (this.dataset.tab === 'oa-sim') { loadInterfacesForSelect(); }
+        else if (this.dataset.tab === 'proofread-sim') { loadProofreadConfig(); }
         else if (this.dataset.tab === 'sys') loadSysConfig();
         else if (this.dataset.tab === 'users') loadUsers();
     });
@@ -510,6 +511,153 @@ async function deleteUser(name) {
         if (json.status === 'ok') { toast('删除成功', 'success'); loadUsers(); }
         else { toast(json.error || '删除失败', 'error'); }
     } catch (err) { toast('删除失败: ' + err.message, 'error'); }
+}
+
+// ============================================================
+// 审稿模拟
+// ============================================================
+var prPollTimer = null;
+var prAllowedExts = ['.docx', '.doc', '.pdf', '.txt', '.md', '.xlsx'];
+var prCurrentTaskId = '';
+var prCurrentStatus = '';
+
+async function loadProofreadConfig() {
+    try {
+        var resp = await fetch('/api/inner/config'); var json = await resp.json();
+        var pr = json.data.proofread || {};
+        document.getElementById('prBaseURL').value = pr.base_url || '';
+        document.getElementById('prAPIKey').value = pr.api_key || '';
+    } catch (_) {}
+    // 恢复上次的审稿任务状态
+    restoreProofreadState();
+}
+
+async function restoreProofreadState() {
+    try {
+        var resp = await fetch('/api/inner/proofread/state');
+        var json = await resp.json();
+        if (json.status !== 'ok') return;
+        var data = json.data || {};
+        if (data.task_id) {
+            prSetTaskId(data.task_id);
+            prCurrentStatus = data.status || '';
+            document.getElementById('prResult').textContent = '（恢复上一任务 ' + data.task_id + '）';
+            // 如果上次任务还在进行中，自动恢复轮询
+            if (prCurrentStatus === 'pending' || prCurrentStatus === 'processing') {
+                if (prPollTimer) clearTimeout(prPollTimer);
+                prPollTimer = setTimeout(function() { proofreadQuery(true); }, 2000);
+            }
+        }
+    } catch (_) {}
+}
+
+async function saveProofreadConfig() {
+    try {
+        var resp = await fetch('/api/inner/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                proofread: {
+                    base_url: document.getElementById('prBaseURL').value.trim(),
+                    api_key: document.getElementById('prAPIKey').value.trim()
+                }
+            })
+        });
+        var json = await resp.json();
+        if (json.status === 'ok') { toast('审稿配置已保存', 'success'); }
+        else { toast(json.error || '保存失败', 'error'); }
+    } catch (err) { toast('保存失败: ' + err.message, 'error'); }
+}
+
+function prFileExt(fileName) {
+    var i = fileName.lastIndexOf('.');
+    if (i < 0) return '';
+    return fileName.slice(i).toLowerCase();
+}
+
+function prSetTaskId(taskId) {
+    prCurrentTaskId = taskId;
+    var el = document.getElementById('prTaskId');
+    el.textContent = taskId || '无';
+}
+
+async function proofreadSubmit() {
+    var fileInput = document.getElementById('prFile');
+    if (!fileInput.files || !fileInput.files[0]) { toast('请选择文档文件', 'error'); return; }
+
+    var file = fileInput.files[0];
+    var ext = prFileExt(file.name);
+    if (prAllowedExts.indexOf(ext) < 0) {
+        toast('不支持的文件格式: ' + (ext || '无扩展名') + '，仅支持 docx/doc/pdf/txt/md/xlsx', 'error');
+        return;
+    }
+
+    // 已有未完成的审稿任务时提醒，确认则覆盖
+    if (prCurrentTaskId && (prCurrentStatus === 'pending' || prCurrentStatus === 'processing')) {
+        var ok = confirm('当前任务 ' + prCurrentTaskId + ' 尚未完成审稿，重新提交将覆盖它。是否继续？');
+        if (!ok) return;
+    }
+
+    document.getElementById('prResult').textContent = '提交中...';
+
+    var formData = new FormData();
+    formData.append('file', file);
+    var instructions = document.getElementById('prInstructions').value.trim();
+    if (instructions) formData.append('additional_instructions', instructions);
+
+    try {
+        var start = Date.now();
+        var resp = await fetch('/api/inner/proofread/submit', {
+            method: 'POST',
+            body: formData
+        });
+        var elapsed = Date.now() - start;
+        var json = await resp.json();
+        var result = JSON.stringify(json, null, 2);
+        document.getElementById('prResult').textContent = result + '\n\n--- 耗时: ' + elapsed + 'ms ---';
+
+        if (json.success && json.data && json.data.task_id) {
+            prSetTaskId(json.data.task_id);
+            prCurrentStatus = 'pending';
+            fileInput.value = '';
+            // 提交成功后自动开始轮询
+            if (prPollTimer) clearTimeout(prPollTimer);
+            prPollTimer = setTimeout(function() { proofreadQuery(true); }, 15000);
+        }
+    } catch (err) {
+        document.getElementById('prResult').textContent = '提交失败: ' + err.message;
+    }
+}
+
+async function proofreadQuery(auto) {
+    var taskId = prCurrentTaskId;
+    if (!taskId) { toast('请先提交文档', 'error'); return; }
+
+    document.getElementById('prResult').textContent = '查询中...';
+
+    try {
+        var start = Date.now();
+        var resp = await fetch('/api/inner/proofread/query/' + encodeURIComponent(taskId));
+        var elapsed = Date.now() - start;
+        var json = await resp.json();
+        var result = JSON.stringify(json, null, 2);
+        document.getElementById('prResult').textContent = result + '\n\n--- 耗时: ' + elapsed + 'ms ---';
+
+        // 自动轮询：processing/pending 状态 15 秒后再查
+        if (json.success && json.data) {
+            prCurrentStatus = json.data.status || '';
+            var status = prCurrentStatus;
+            if (auto && (status === 'pending' || status === 'processing')) {
+                document.getElementById('prResult').textContent = result + '\n\n>>> 15 秒后自动查询... <<<';
+                if (prPollTimer) clearTimeout(prPollTimer);
+                prPollTimer = setTimeout(function() { proofreadQuery(true); }, 15000);
+            } else {
+                if (prPollTimer) clearTimeout(prPollTimer);
+            }
+        }
+    } catch (err) {
+        document.getElementById('prResult').textContent = '查询失败: ' + err.message;
+    }
 }
 
 // ============================================================

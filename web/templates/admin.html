@@ -37,6 +37,9 @@
                 <div class="cfg-tab" data-tab="oa-sim">
                     <i class="fas fa-flask"></i> 操作模拟
                 </div>
+                <div class="cfg-tab" data-tab="proofread-sim">
+                    <i class="fas fa-file-signature"></i> 审稿模拟
+                </div>
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="sys">
                     <i class="fas fa-sliders-h"></i> 系统设置
@@ -212,6 +215,62 @@
                     <div class="oa-step">
                         <h3>返回结果</h3>
                         <pre id="oaResult" style="background:#2d2d2d;color:#f8f8f2;padding:16px;border-radius:8px;overflow-x:auto;max-height:400px;font-size:0.85rem;">等待调用...</pre>
+                    </div>
+                </div>
+
+                <!-- 审稿模拟 -->
+                <div class="cfg-section" id="section-proofread-sim">
+                    <h2><i class="fas fa-file-signature"></i> 审稿模拟</h2>
+                    <p style="color:#888;margin-bottom:16px;">
+                        对接 rdCLI 文档核稿接口（异步）。配置服务地址，上传文档，获取核稿意见。
+                    </p>
+
+                    <div class="oa-step">
+                        <h3>服务配置</h3>
+                        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+                            <div class="form-g" style="flex:2;min-width:260px;margin-bottom:0;">
+                                <label>基础地址</label>
+                                <input type="text" id="prBaseURL" placeholder="https://rdcli.example.com" style="width:100%;">
+                            </div>
+                            <div class="form-g" style="flex:1;min-width:200px;margin-bottom:0;">
+                                <label>API Key <span style="color:#999;font-weight:400;">(可选)</span></label>
+                                <input type="text" id="prAPIKey" placeholder="ck_xxxx..." style="width:100%;font-family:monospace;">
+                            </div>
+                            <button class="cfg-btn cfg-btn-save" onclick="saveProofreadConfig()">
+                                <i class="fas fa-check"></i> 保存
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="oa-step">
+                        <h3>提交任务</h3>
+                        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+                            <div class="form-g" style="flex:1;min-width:200px;margin-bottom:0;">
+                                <label>选择文档 <span style="color:#999;font-weight:400;">(docx/doc/pdf/txt/md/xlsx)</span></label>
+                                <input type="file" id="prFile" accept=".docx,.doc,.pdf,.txt,.md,.xlsx" style="padding:8px;">
+                            </div>
+                            <button class="cfg-btn cfg-btn-save" onclick="proofreadSubmit()">
+                                <i class="fas fa-upload"></i> 提交
+                            </button>
+                        </div>
+                        <div class="form-g" style="margin-top:12px;margin-bottom:0;">
+                            <label>附加说明 <span style="color:#999;font-weight:400;">(可选)</span></label>
+                            <input type="text" id="prInstructions" placeholder="如：重点检查数据引用" style="width:100%;">
+                        </div>
+                    </div>
+
+                    <div class="oa-step">
+                        <h3>查询结果</h3>
+                        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">
+                            <div class="form-g" style="flex:1;min-width:260px;margin-bottom:0;">
+                                <label>当前任务 ID</label>
+                                <div id="prTaskId" style="padding:10px 14px;border:1px solid #e0e3e8;border-radius:8px;background:#f7f8fa;font-family:monospace;font-size:0.85rem;color:#555;">无</div>
+                            </div>
+                            <button class="cfg-btn cfg-btn-save" onclick="proofreadQuery(true)">
+                                <i class="fas fa-search"></i> 查询
+                            </button>
+                        </div>
+                        <pre id="prResult" style="background:#2d2d2d;color:#f8f8f2;padding:16px;border-radius:8px;overflow-x:auto;max-height:400px;font-size:0.85rem;">等待提交任务...</pre>
                     </div>
                 </div>
 

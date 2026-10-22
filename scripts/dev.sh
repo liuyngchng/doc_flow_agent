@@ -18,9 +18,9 @@ ensure_go_tarball() {
   mkdir -p "$(dirname "$GO_TARBALL")"
   echo "Downloading Go ${GO_VERSION} toolchain..."
   if command -v curl &>/dev/null; then
-    curl -fL --retry 3 -o "$GO_TARBALL" "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+    curl -fL --retry 3 -o "$GO_TARBALL" "https://golang.google.cn/dl/go${GO_VERSION}.linux-amd64.tar.gz"
   elif command -v wget &>/dev/null; then
-    wget -O "$GO_TARBALL" "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+    wget -O "$GO_TARBALL" "https://golang.google.cn/dl/go${GO_VERSION}.linux-amd64.tar.gz"
   else
     echo "ERROR: 需要 curl 或 wget 下载 Go toolchain"
     exit 1

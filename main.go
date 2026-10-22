@@ -134,6 +134,11 @@ func main() {
 		v1.GET("/users", h.User.ListUsers)
 		v1.POST("/users", h.User.CreateUser)
 		v1.DELETE("/users/:name", h.User.DeleteUser)
+
+		// 审稿模拟
+		v1.POST("/proofread/submit", h.Proofread.Submit)
+		v1.GET("/proofread/query/:task_id", h.Proofread.Query)
+		v1.GET("/proofread/state", h.Proofread.State)
 	}
 
 	// 用户自助 API

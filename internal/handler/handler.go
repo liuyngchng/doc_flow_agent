@@ -16,6 +16,7 @@ type Handler struct {
 	Call      *CallHandler
 	CallLog   *CallLogHandler
 	User      *UserHandler
+	Proofread *ProofreadHandler
 }
 
 // New 创建 Handler
@@ -31,5 +32,6 @@ func New(cfg *model.Config, st store.MetaStore) *Handler {
 		Call:      NewCallHandler(st, cfg),
 		CallLog:   NewCallLogHandler(st),
 		User:      NewUserHandler(st, auth),
+			Proofread: NewProofreadHandler(st),
 	}
 }

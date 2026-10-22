@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -22,6 +25,29 @@ func hashPassword(password string) (string, error) {
 // comparePassword 验证密码
 func comparePassword(hash, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+}
+
+// validatePasswordStrength 校验密码强度：至少 8 位，且同时包含字母和数字
+func validatePasswordStrength(password string) error {
+	if utf8.RuneCountInString(password) < 8 {
+		return fmt.Errorf("密码长度至少 8 位")
+	}
+	var hasLetter, hasDigit bool
+	for _, r := range password {
+		switch {
+		case unicode.IsLetter(r):
+			hasLetter = true
+		case unicode.IsDigit(r):
+			hasDigit = true
+		}
+	}
+	if !hasLetter {
+		return fmt.Errorf("密码必须包含字母")
+	}
+	if !hasDigit {
+		return fmt.Errorf("密码必须包含数字")
+	}
+	return nil
 }
 
 // replaceAll 字符串替换（封装 strings.ReplaceAll）

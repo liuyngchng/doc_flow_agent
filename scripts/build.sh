@@ -117,7 +117,7 @@ ensure_cert() {
 # ================================================================
 GO_VERSION="1.24.13"
 GO_TARBALL="$SCRIPT_DIR/build/deps/go${GO_VERSION}.linux-amd64.tar.gz"
-GO_DOWNLOAD_URL="https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+GO_DOWNLOAD_URL="https://golang.google.cn/dl/go${GO_VERSION}.linux-amd64.tar.gz"
 
 ensure_go_tarball() {
   if [[ -f "$GO_TARBALL" ]]; then
