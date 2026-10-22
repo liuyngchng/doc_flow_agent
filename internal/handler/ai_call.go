@@ -33,7 +33,7 @@ func NewCallHandler(st store.MetaStore, cfg *model.Config) *CallHandler {
 }
 
 // Call 通用调用
-// POST /api/call/*interfacePath
+// POST /api/v1/*interfacePath
 // 请求体：完整 JSON（透传给 LLM），内含 file_url 字段会被自动下载解析
 func (h *CallHandler) Call(c *gin.Context) {
 	startTime := time.Now()
@@ -41,7 +41,7 @@ func (h *CallHandler) Call(c *gin.Context) {
 	// 1. 获取接口路径（从 URL 通配部分提取）
 	interfacePath := strings.TrimPrefix(c.Param("interfacePath"), "/")
 	if interfacePath == "" || interfacePath == "/" {
-		c.JSON(400, model.NewErrorResponse(model.ErrCodeParamError, "缺少接口路径，正确格式: POST /api/call/v1/document/classify"))
+		c.JSON(400, model.NewErrorResponse(model.ErrCodeParamError, "缺少接口路径，正确格式: POST /api/v1/document/classify"))
 		return
 	}
 

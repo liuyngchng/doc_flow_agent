@@ -120,7 +120,7 @@ func (h *LLMConfigHandler) Test(c *gin.Context) {
 	paramsJSON, _ := json.Marshal(req)
 
 	c.JSON(200, gin.H{
-		"message": "测试连接请通过 /api/v1/llm-configs/test-call 接口",
+		"message": "测试连接请通过 /api/inner/llm-configs/test-call 接口",
 		"params":  string(paramsJSON),
 	})
 }

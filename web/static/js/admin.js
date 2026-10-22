@@ -40,7 +40,7 @@ document.querySelectorAll('.cfg-tab').forEach(tab => {
 // ============================================================
 async function loadInterfaces() {
     try {
-        var resp = await fetch('/api/v1/interfaces');
+        var resp = await fetch('/api/inner/interfaces');
         var json = await resp.json();
         var data = json.data || [];
         var tbody = document.getElementById('ifacesTbody');
@@ -52,7 +52,7 @@ async function loadInterfaces() {
             return '<tr>' +
                 '<td>' + iface.id + '</td>' +
                 '<td><strong>' + esc(iface.name) + '</strong></td>' +
-                '<td><code>/api/call/' + esc(iface.path) + '</code></td>' +
+                '<td><code>/api/v1/' + esc(iface.path) + '</code></td>' +
                 '<td>' + (iface.enabled ? '<span class="badge badge-success">启用</span>' : '<span class="badge badge-gray">禁用</span>') + '</td>' +
                 '<td>v' + iface.version + '</td>' +
                 '<td>' +
@@ -86,7 +86,7 @@ function showIfaceModal() {
 
 async function editIface(id) {
     try {
-        var resp = await fetch('/api/v1/interfaces/' + id);
+        var resp = await fetch('/api/inner/interfaces/' + id);
         var json = await resp.json();
         var iface = json.data;
         currentIfaceId = iface.id;
@@ -172,7 +172,7 @@ document.getElementById('ifaceForm').addEventListener('submit', async function(e
     }
 
     try {
-        var url = '/api/v1/interfaces';
+        var url = '/api/inner/interfaces';
         var method = 'POST';
         if (currentIfaceId > 0) {
             url += '/' + currentIfaceId;
@@ -194,11 +194,11 @@ document.getElementById('ifaceForm').addEventListener('submit', async function(e
 
 async function testIface(id) {
     try {
-        var resp = await fetch('/api/v1/interfaces/' + id);
+        var resp = await fetch('/api/inner/interfaces/' + id);
         var json = await resp.json();
         var iface = json.data;
         // Show rendered prompt
-        var testResp = await fetch('/api/v1/interfaces/' + id + '/test', {
+        var testResp = await fetch('/api/inner/interfaces/' + id + '/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ test: true })
@@ -213,7 +213,7 @@ async function testIface(id) {
 async function deleteIface(id) {
     if (!confirm('确定删除此接口？')) return;
     try {
-        var resp = await fetch('/api/v1/interfaces/' + id, { method: 'DELETE' });
+        var resp = await fetch('/api/inner/interfaces/' + id, { method: 'DELETE' });
         var json = await resp.json();
         if (json.status === 'ok') { toast('删除成功', 'success'); loadInterfaces(); }
         else { toast(json.error || '删除失败', 'error'); }
@@ -227,7 +227,7 @@ let currentLLMId = 0;
 
 async function loadLLMConfigs() {
     try {
-        var resp = await fetch('/api/v1/llm-configs');
+        var resp = await fetch('/api/inner/llm-configs');
         var json = await resp.json();
         var data = json.data || [];
         var tbody = document.getElementById('llmTbody');
@@ -266,7 +266,7 @@ function showLLMModal() {
 
 async function editLLM(id) {
     try {
-        var resp = await fetch('/api/v1/llm-configs'); var json = await resp.json();
+        var resp = await fetch('/api/inner/llm-configs'); var json = await resp.json();
         var cfg = (json.data || []).find(function(c) { return c.id === id; });
         if (!cfg) return;
         currentLLMId = id;
@@ -298,7 +298,7 @@ document.getElementById('llmForm').addEventListener('submit', async function(e) 
     };
     if (!data.name || !data.api_uri || !data.model_name) { toast('名称、API地址和模型名称不能为空', 'error'); return; }
     try {
-        var url = '/api/v1/llm-configs'; var method = 'POST';
+        var url = '/api/inner/llm-configs'; var method = 'POST';
         if (currentLLMId > 0) { url += '/' + currentLLMId; method = 'PUT'; }
         var resp = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         var json = await resp.json();
@@ -309,7 +309,7 @@ document.getElementById('llmForm').addEventListener('submit', async function(e) 
 
 async function setDefaultLLM(id) {
     try {
-        var resp = await fetch('/api/v1/llm-configs/' + id + '/default', { method: 'PUT' });
+        var resp = await fetch('/api/inner/llm-configs/' + id + '/default', { method: 'PUT' });
         var json = await resp.json();
         if (json.status === 'ok') { toast('已设为默认', 'success'); loadLLMConfigs(); }
         else { toast(json.error || '设置失败', 'error'); }
@@ -319,7 +319,7 @@ async function setDefaultLLM(id) {
 async function deleteLLM(id) {
     if (!confirm('确定删除此模型配置？')) return;
     try {
-        var resp = await fetch('/api/v1/llm-configs/' + id, { method: 'DELETE' });
+        var resp = await fetch('/api/inner/llm-configs/' + id, { method: 'DELETE' });
         var json = await resp.json();
         if (json.status === 'ok') { toast('删除成功', 'success'); loadLLMConfigs(); }
         else { toast(json.error || '删除失败', 'error'); }
@@ -328,7 +328,7 @@ async function deleteLLM(id) {
 
 async function loadLLMForSelect(selectedId) {
     try {
-        var resp = await fetch('/api/v1/llm-configs'); var json = await resp.json();
+        var resp = await fetch('/api/inner/llm-configs'); var json = await resp.json();
         var sel = document.getElementById('ifaceLLM');
         sel.innerHTML = '<option value="">-- 使用默认模型 --</option>';
         (json.data || []).forEach(function(c) {
@@ -342,7 +342,7 @@ async function loadLLMForSelect(selectedId) {
 // ============================================================
 async function loadFiles() {
     try {
-        var resp = await fetch('/api/v1/files'); var json = await resp.json();
+        var resp = await fetch('/api/inner/files'); var json = await resp.json();
         var data = json.data || [];
         var tbody = document.getElementById('filesTbody');
         if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;">暂无文件</td></tr>'; return; }
@@ -364,7 +364,7 @@ async function loadFiles() {
 async function deleteFile(fileId) {
     if (!confirm('确定删除此文件及预处理结果？')) return;
     try {
-        var resp = await fetch('/api/v1/files/' + fileId, { method: 'DELETE' });
+        var resp = await fetch('/api/inner/files/' + fileId, { method: 'DELETE' });
         var json = await resp.json();
         if (json.status === 'ok') { toast('删除成功', 'success'); loadFiles(); }
         else { toast(json.error || '删除失败', 'error'); }
@@ -376,7 +376,7 @@ async function deleteFile(fileId) {
 // ============================================================
 async function loadLogs() {
     try {
-        var resp = await fetch('/api/v1/call-logs'); var json = await resp.json();
+        var resp = await fetch('/api/inner/call-logs'); var json = await resp.json();
         var data = json.data || [];
         var tbody = document.getElementById('logsTbody');
         if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">暂无日志</td></tr>'; return; }
@@ -398,7 +398,7 @@ async function loadLogs() {
 // ============================================================
 async function loadInterfacesForSelect() {
     try {
-        var resp = await fetch('/api/v1/interfaces'); var json = await resp.json();
+        var resp = await fetch('/api/inner/interfaces'); var json = await resp.json();
         var sel = document.getElementById('oaInterface');
         sel.innerHTML = '<option value="">-- 选择接口 --</option>';
         (json.data || []).forEach(function(iface) {
@@ -416,7 +416,7 @@ async function loadInterfacesForSelect() {
 
     document.getElementById('oaResult').textContent = '调用中...';
     try {
-        var resp = await fetch('/api/call/' + ifacePath, {
+        var resp = await fetch('/api/v1/' + ifacePath, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
@@ -433,7 +433,7 @@ async function loadInterfacesForSelect() {
 // ============================================================
 async function loadSysConfig() {
     try {
-        var resp = await fetch('/api/v1/config'); var json = await resp.json();
+        var resp = await fetch('/api/inner/config'); var json = await resp.json();
         document.getElementById('sysName').value = json.data.sys.name || '';
         var apiEnabled = json.data.api && json.data.api.auth_enabled;
         document.getElementById('apiAuthEnabled').checked = apiEnabled || false;
@@ -451,7 +451,7 @@ function generateAPIToken() {
 
 async function saveSysConfig() {
     try {
-        var resp = await fetch('/api/v1/config', {
+        var resp = await fetch('/api/inner/config', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -473,7 +473,7 @@ async function saveSysConfig() {
 // ============================================================
 async function loadUsers() {
     try {
-        var resp = await fetch('/api/v1/users'); var json = await resp.json();
+        var resp = await fetch('/api/inner/users'); var json = await resp.json();
         var data = json.data || [];
         var tbody = document.getElementById('usersTbody');
         tbody.innerHTML = data.map(function(u) {
@@ -489,7 +489,7 @@ async function addUser() {
     var role = parseInt(document.getElementById('newUserRole').value);
     if (!name || !pwd) { toast('用户名和密码不能为空', 'error'); return; }
     try {
-        var resp = await fetch('/api/v1/users', {
+        var resp = await fetch('/api/inner/users', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_name: name, user_pwd: pwd, role: role })
         });
@@ -502,7 +502,7 @@ async function addUser() {
 async function deleteUser(name) {
     if (!confirm('确定删除用户 ' + name + '？')) return;
     try {
-        var resp = await fetch('/api/v1/users/' + name, { method: 'DELETE' });
+        var resp = await fetch('/api/inner/users/' + name, { method: 'DELETE' });
         var json = await resp.json();
         if (json.status === 'ok') { toast('删除成功', 'success'); loadUsers(); }
         else { toast(json.error || '删除失败', 'error'); }

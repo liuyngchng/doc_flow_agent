@@ -12,7 +12,7 @@ import (
 // CallLogMiddleware 对外 API 调用日志中间件
 func CallLogMiddleware(st store.MetaStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 只记录 /open_api 和 /api/call 等对外调用
+		// 只记录 /open_api 和 /api/v1 等对外调用
 		path := c.Request.URL.Path
 		if !isLoggablePath(path) {
 			c.Next()
@@ -36,7 +36,7 @@ func CallLogMiddleware(st store.MetaStore) gin.HandlerFunc {
 }
 
 func isLoggablePath(path string) bool {
-	return len(path) > 4 && (path[:8] == "/open_api" || path[:11] == "/api/files/" || path[:9] == "/api/call")
+	return len(path) > 4 && (path[:8] == "/open_api" || path[:11] == "/api/files/" || path[:8] == "/api/v1/")
 }
 
 // SecurityHeaders 安全头中间件

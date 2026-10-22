@@ -100,9 +100,9 @@ func main() {
 	}
 
 	// ============================================================
-	// /api/v1/ — 管理后台 API（Cookie 认证）
+	// /api/inner/ — 管理后台 API（Cookie 认证）
 	// ============================================================
-	v1 := r.Group("/api/v1")
+	v1 := r.Group("/api/inner")
 	v1.Use(h.Auth.CookieAPIAuthMiddleware())
 	{
 		// 配置
@@ -151,7 +151,7 @@ func main() {
 	r.GET("/api/files/status/:file_id", h.File.Status)
 
 	// 电子公文工作流调用接口（支持 X-Api-Key 或 Bearer token）
-	r.POST("/api/call/*interfacePath", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
+	r.POST("/api/v1/*interfacePath", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
 
 	// 优雅退出
 	go func() {

@@ -87,7 +87,7 @@
                 <!-- 接口管理 -->
                 <div class="cfg-section" id="section-interfaces">
                     <h2><i class="fas fa-code"></i> 接口管理</h2>
-                    <p style="color:#888;margin-bottom:16px;">配置接口，定义提示词模板。电子公文工作流通过 <code>/api/call/{path}</code> 调用。</p>
+                    <p style="color:#888;margin-bottom:16px;">配置接口，定义提示词模板。电子公文工作流通过 <code>/api/v1/{path}</code> 调用。</p>
                     <button class="cfg-btn cfg-btn-save" onclick="showIfaceModal()" style="margin-bottom:16px;">
                         <i class="fas fa-plus"></i> 新建接口
                     </button>
@@ -109,8 +109,8 @@
                                     </div>
                                     <div class="form-g" style="flex:1;min-width:200px;">
                                         <label>接口路径 <span style="color:#e53935;">*</span></label>
-                                        <input type="text" id="ifacePath" required placeholder="如：v1/document/classify" style="width:100%;">
-                                        <small style="color:#888;">调用地址: <code>/api/call/{path}</code></small>
+                                        <input type="text" id="ifacePath" required placeholder="如：document/classify" style="width:100%;">
+                                        <small style="color:#888;">调用地址: <code>/api/v1/{path}</code></small>
                                     </div>
                                 </div>
                                 <div class="form-g">
@@ -225,7 +225,7 @@
 
                     <h3 style="margin-top:24px;border-top:1px solid #e0e3e8;padding-top:20px;">对外 API 认证</h3>
                     <p style="color:#888;margin-bottom:12px;font-size:0.85rem;">
-                        启用后调用 <code>/api/call/{path}</code> 必须携带 <code>X-Api-Key: &lt;token&gt;</code> 头。
+                        启用后调用 <code>/api/v1/{path}</code> 必须携带 <code>X-Api-Key: &lt;token&gt;</code> 头。
                     </p>
                     <div style="margin-bottom:12px;">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">

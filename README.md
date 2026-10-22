@@ -74,19 +74,19 @@ curl -k -X POST https://localhost:20001/api/ai/call \
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET/POST | `/api/v1/interfaces` | AI 接口列表/创建 |
-| PUT/DELETE | `/api/v1/interfaces/:id` | 更新/删除接口 |
-| POST | `/api/v1/interfaces/:id/test` | 测试接口 |
-| GET/POST | `/api/v1/llm-configs` | LLM 配置列表/创建 |
-| PUT/DELETE | `/api/v1/llm-configs/:id` | 更新/删除配置 |
-| PUT | `/api/v1/llm-configs/:id/default` | 设为默认 |
-| GET | `/api/v1/files` | 文件列表 |
-| DELETE | `/api/v1/files/:id` | 删除文件 |
-| GET | `/api/v1/call-logs` | 调用日志 |
+| GET/POST | `/api/inner/interfaces` | AI 接口列表/创建 |
+| PUT/DELETE | `/api/inner/interfaces/:id` | 更新/删除接口 |
+| POST | `/api/inner/interfaces/:id/test` | 测试接口 |
+| GET/POST | `/api/inner/llm-configs` | LLM 配置列表/创建 |
+| PUT/DELETE | `/api/inner/llm-configs/:id` | 更新/删除配置 |
+| PUT | `/api/inner/llm-configs/:id/default` | 设为默认 |
+| GET | `/api/inner/files` | 文件列表 |
+| DELETE | `/api/inner/files/:id` | 删除文件 |
+| GET | `/api/inner/call-logs` | 调用日志 |
 
 ## HTTP 接口工作流程
 
-系统创建的 AI 接口（`POST /api/call/{接口路径}`）按以下 5 步自动处理每次请求：
+系统创建的 AI 接口（`POST /api/v1/{接口路径}`）按以下 5 步自动处理每次请求：
 
 ### 第一步：下载文件并解析
 

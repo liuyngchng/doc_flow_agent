@@ -60,7 +60,7 @@ document.getElementById('forcePwdForm').addEventListener('submit', async functio
     }
 
     try {
-        const resp = await fetch('/api/v1/user/password', {
+        const resp = await fetch('/api/inner/user/password', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ old_pwd: document.getElementById('userPwd').value.trim(), new_pwd: newPwd })
