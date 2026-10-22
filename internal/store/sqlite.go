@@ -107,6 +107,8 @@ func (s *SQLiteStore) initSchema() error {
 		text_content TEXT DEFAULT '',
 		text_length INTEGER DEFAULT 0,
 		ocr_confidence REAL,
+		has_seal INTEGER DEFAULT 0,
+		seal_text TEXT DEFAULT '',
 		status TEXT DEFAULT 'processing',
 		error_message TEXT DEFAULT '',
 		biz_id TEXT DEFAULT '',
@@ -142,6 +144,10 @@ func (s *SQLiteStore) initSchema() error {
 
 	// 兼容旧表：如果 must_change_pwd 列不存在则添加
 	s.db.Exec("ALTER TABLE users ADD COLUMN must_change_pwd INTEGER DEFAULT 0")
+
+	// 兼容旧表：如果 has_seal / seal_text 列不存在则添加
+	s.db.Exec("ALTER TABLE files ADD COLUMN has_seal INTEGER DEFAULT 0")
+	s.db.Exec("ALTER TABLE files ADD COLUMN seal_text TEXT DEFAULT ''")
 
 	// 创建默认 admin 账号 (admin/admin)
 	var count int
@@ -431,25 +437,36 @@ func (s *SQLiteStore) IncrementInterfaceVersion(id int64) error {
 // ============================================================
 
 func (s *SQLiteStore) CreateFileRecord(record *model.FileRecord) error {
+	sealJSON, _ := json.Marshal(record.SealText)
+	hasSeal := 0
+	if record.HasSeal {
+		hasSeal = 1
+	}
 	_, err := s.db.Exec(
-		"INSERT INTO files (file_id, original_name, file_type, file_path, status, biz_id) VALUES (?, ?, ?, ?, ?, ?)",
-		record.FileID, record.OriginalName, record.FileType, record.FilePath, record.Status, record.BizID,
+		"INSERT INTO files (file_id, original_name, file_type, file_path, status, biz_id, has_seal, seal_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		record.FileID, record.OriginalName, record.FileType, record.FilePath, record.Status, record.BizID, hasSeal, string(sealJSON),
 	)
 	return err
 }
 
 func (s *SQLiteStore) GetFileRecord(fileID string) (*model.FileRecord, error) {
 	f := &model.FileRecord{}
+	var hasSeal int
+	var sealText string
 	err := s.db.QueryRow(
-		"SELECT id, file_id, original_name, file_type, file_path, COALESCE(text_content,''), text_length, COALESCE(ocr_confidence,0), status, COALESCE(error_message,''), COALESCE(biz_id,''), COALESCE(created_at,'') FROM files WHERE file_id=?",
+		"SELECT id, file_id, original_name, file_type, file_path, COALESCE(text_content,''), text_length, COALESCE(ocr_confidence,0), COALESCE(has_seal,0), COALESCE(seal_text,''), status, COALESCE(error_message,''), COALESCE(biz_id,''), COALESCE(created_at,'') FROM files WHERE file_id=?",
 		fileID,
 	).Scan(&f.ID, &f.FileID, &f.OriginalName, &f.FileType, &f.FilePath, &f.TextContent,
-		&f.TextLength, &f.OCRConfidence, &f.Status, &f.ErrorMessage, &f.BizID, &f.CreatedAt)
+		&f.TextLength, &f.OCRConfidence, &hasSeal, &sealText, &f.Status, &f.ErrorMessage, &f.BizID, &f.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	f.HasSeal = hasSeal == 1
+	if sealText != "" {
+		json.Unmarshal([]byte(sealText), &f.SealText)
 	}
 	return f, nil
 }
@@ -459,7 +476,7 @@ func (s *SQLiteStore) ListFileRecords(limit, offset int) ([]model.FileRecord, in
 	s.db.QueryRow("SELECT COUNT(*) FROM files").Scan(&total)
 
 	rows, err := s.db.Query(
-		"SELECT id, file_id, original_name, file_type, file_path, '', text_length, COALESCE(ocr_confidence,0), status, COALESCE(error_message,''), COALESCE(biz_id,''), COALESCE(created_at,'') FROM files ORDER BY id DESC LIMIT ? OFFSET ?",
+		"SELECT id, file_id, original_name, file_type, file_path, '', text_length, COALESCE(ocr_confidence,0), COALESCE(has_seal,0), COALESCE(seal_text,''), status, COALESCE(error_message,''), COALESCE(biz_id,''), COALESCE(created_at,'') FROM files ORDER BY id DESC LIMIT ? OFFSET ?",
 		limit, offset,
 	)
 	if err != nil {
@@ -470,9 +487,15 @@ func (s *SQLiteStore) ListFileRecords(limit, offset int) ([]model.FileRecord, in
 	var files []model.FileRecord
 	for rows.Next() {
 		var f model.FileRecord
+		var hasSeal int
+		var sealText string
 		if err := rows.Scan(&f.ID, &f.FileID, &f.OriginalName, &f.FileType, &f.FilePath,
-			&f.TextContent, &f.TextLength, &f.OCRConfidence, &f.Status, &f.ErrorMessage, &f.BizID, &f.CreatedAt); err != nil {
+			&f.TextContent, &f.TextLength, &f.OCRConfidence, &hasSeal, &sealText, &f.Status, &f.ErrorMessage, &f.BizID, &f.CreatedAt); err != nil {
 			return nil, 0, err
+		}
+		f.HasSeal = hasSeal == 1
+		if sealText != "" {
+			json.Unmarshal([]byte(sealText), &f.SealText)
 		}
 		files = append(files, f)
 	}
@@ -484,10 +507,15 @@ func (s *SQLiteStore) UpdateFileStatus(fileID, status, errMsg string) error {
 	return err
 }
 
-func (s *SQLiteStore) UpdateFileText(fileID, text string, length int, ocrConf float64) error {
+func (s *SQLiteStore) UpdateFileParseResult(fileID string, pd *model.ParsedDocument) error {
+	sealJSON, _ := json.Marshal(pd.SealText)
+	hasSeal := 0
+	if pd.HasSeal {
+		hasSeal = 1
+	}
 	_, err := s.db.Exec(
-		"UPDATE files SET text_content=?, text_length=?, ocr_confidence=?, status='ready' WHERE file_id=?",
-		text, length, ocrConf, fileID,
+		"UPDATE files SET text_content=?, text_length=?, ocr_confidence=?, has_seal=?, seal_text=?, status='ready' WHERE file_id=?",
+		pd.Text, len(pd.Text), pd.OCRConfidence, hasSeal, string(sealJSON), fileID,
 	)
 	return err
 }

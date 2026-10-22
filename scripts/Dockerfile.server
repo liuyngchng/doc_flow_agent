@@ -5,7 +5,7 @@
 # 先构建二进制 (scripts/build.sh)，再用此文件构建镜像。
 #
 # Run:
-#   docker run -d --rm --name doc-ai-gateway -p 8080:8080 \
+#   docker run -d --rm --name doc-ai-gateway -p 20001:20001 \
 #     -v $(pwd)/data:/app/data \
 #     doc-ai-gateway:latest
 # ================================================================
@@ -32,13 +32,15 @@ WORKDIR /app
 
 # 预编译二进制
 COPY dist/doc-ai-gateway /app/doc-ai-gateway
+COPY dist/cert.pem /app/dist/cert.pem
+COPY dist/key.pem /app/dist/key.pem
 COPY cfg.yml.template /app/cfg.yml
 
 # 数据库和数据目录由 volume 挂载提供
 RUN mkdir -p /app/data/files /app/data/logs
 
-ENV PORT=8080
+ENV PORT=20001
 
-EXPOSE 8080
+EXPOSE 20001
 
 ENTRYPOINT ["/app/doc-ai-gateway"]

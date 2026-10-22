@@ -29,15 +29,16 @@ cd dist/doc-ai-gateway-windows-amd64
 doc-ai-gateway.exe         # 双击运行
 ```
 
-访问 http://localhost:8080/admin ，默认账号 `admin` / `admin`。
+访问 https://localhost:20001/admin ，默认账号 `admin` / `admin`。
 
-> **注意**：admin 首次登录必须修改密码，**2 小时内未修改则初始密码作废**，需删库重建。
+> **注意**：首次访问时浏览器会提示证书不安全（自签证书），点击"高级"→"继续访问"即可。
+> admin 首次登录必须修改密码，**2 小时内未修改则初始密码作废**，需删库重建。
 
 ### Linux / Docker
 
 ```bash
 scripts/build.sh           # 编译 + 构建 Docker 镜像
-docker run -p 8080:8080 -v $(pwd)/data:/app/data doc-ai-gateway:latest
+docker run -p 20001:20001 -v $(pwd)/data:/app/data doc-ai-gateway:latest
 ```
 
 ## 对外 API（电子公文工作流调用）
@@ -45,7 +46,7 @@ docker run -p 8080:8080 -v $(pwd)/data:/app/data doc-ai-gateway:latest
 ### 1. 上传文件
 
 ```bash
-curl -X POST http://localhost:8080/api/files/upload \
+curl -k -X POST https://localhost:20001/api/files/upload \
   -F "file=@test.pdf" \
   -F "biz_id=FLOW-001"
 # 返回: {"file_id":"F-20261027001","status":"processing",...}
@@ -54,13 +55,13 @@ curl -X POST http://localhost:8080/api/files/upload \
 ### 2. 查询文件状态
 
 ```bash
-curl http://localhost:8080/api/files/status/F-20261027001
+curl -k -X GET https://localhost:20001/api/files/status/F-20261027001
 ```
 
 ### 3. 调用 AI 接口
 
 ```bash
-curl -X POST http://localhost:8080/api/ai/call \
+curl -k -X POST https://localhost:20001/api/ai/call \
   -H "Content-Type: application/json" \
   -d '{
     "file_id": "F-20261027001",
@@ -83,14 +84,80 @@ curl -X POST http://localhost:8080/api/ai/call \
 | DELETE | `/api/v1/files/:id` | 删除文件 |
 | GET | `/api/v1/call-logs` | 调用日志 |
 
-## 提示词模板占位符
+## HTTP 接口工作流程
 
-| 占位符 | 说明 |
-|--------|------|
-| `{{file.text}}` | 文件预处理后的纯文本全文 |
-| `{{file.name}}` | 原始文件名 |
-| `{{file.type}}` | 文件类型 (docx/pdf/xlsx) |
-| `{{params.xxx}}` | 电子公文工作流调用时传入的自定义参数 |
+系统创建的 AI 接口（`POST /api/call/{接口路径}`）按以下 5 步自动处理每次请求：
+
+### 第一步：下载文件并解析
+
+- 递归扫描请求 JSON，检测所有 `file_url` 字段
+- 每个 `file_url` 对应的 WPS/PDF 文档自动下载到临时文件
+- 调用文档解析接口（`cfg.yml` 中 `doc_parser.url`）或内置解析器
+- 解析接口返回 `{text, ocr_confidence, has_seal, seal_text}`：
+  - `text` — 文档文本内容
+  - `ocr_confidence` — OCR 置信度（扫描件）
+  - `has_seal` — 是否检测到印章
+  - `seal_text` — 印章文字列表（如 `["北京XX科技有限公司", "财务专用章"]`）
+- 解析结果（文本、印章信息）**写入数据库**（`files` 表），后续可溯源
+
+### 第二步：数据字典翻译 JSON
+
+- 将请求 JSON 中的 key 按 `cfg.yml` 中 `dict`（数据字典）翻译成中文
+- 例如 `file_type` → `文件类型`，`secret_level` → `密级`
+- 翻译后的 JSON 通过 `{{request.dict}}` 占位符注入提示词，帮助 LLM 准确理解字段含义
+
+### 第三步：组装提示词
+
+- 按接口配置的 `prompt_template` 模板，替换占位符：
+  - `{{request.body}}` — 原始请求 JSON
+  - `{{request.dict}}` — 翻译成中文 key 后的 JSON
+  - `{{file.main_body}}` — 正文文档全文
+  - `{{file.attachments}}` — 附件文档全文
+  - `{{file.doc_basis}}` — 办文依据文档全文
+  - `{{file.seal_text}}` — 所有印章文字汇总
+  - `{{file.all_text}}` — 全部文档文本（分章节）
+- 每个文件文本块自带文件名前缀和印章文字说明
+
+### 第四步：提交 LLM
+
+- 组装 `system`（系统角色提示）+ `user`（组装好的提示词）
+- 调用配置的 LLM（OpenAI 兼容接口），要求返回 JSON
+
+### 第五步：返回结果
+
+- 解析 LLM 输出，包装为统一响应格式 `{code, message, data}`
+- 记录调用日志（请求参数、耗时、输出）
+
+---
+
+## 文件来源约定
+
+电子公文工作流可在请求 JSON 中嵌入 `file_url` 字段来引用待解析的 WPS/PDF 文档：
+
+```json
+{
+  "title": "关于XXXX的通知",
+  "doc_type": "通知",
+  "main_body": {
+    "file_url": "https://wps.example.com/files/xxx.docx",
+    "file_type": "main_body",
+    "file_name": "通知正文.docx"
+  },
+  "attachments": [{
+    "file_url": "https://wps.example.com/files/yyy.xlsx",
+    "file_type": "attachment",
+    "file_name": "附件清单.xlsx"
+  }]
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `file_url` | 文档下载链接（必需），支持 WPS / DOCX / PDF / XLSX |
+| `file_type` | 文档类别：`main_body`（正文）、`attachment`（附件）、`doc_basis`（办文依据） |
+| `file_name` | 文档名称，用于提示词中的文件标识 |
+
+`file_url` 可以在 JSON 的任意嵌套层级出现（数组、子对象均可），系统会自动递归扫描提取。
 
 ## 项目结构
 

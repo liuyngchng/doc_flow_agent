@@ -42,7 +42,7 @@ type MetaStore interface {
 	GetFileRecord(fileID string) (*model.FileRecord, error)
 	ListFileRecords(limit, offset int) ([]model.FileRecord, int, error)
 	UpdateFileStatus(fileID, status, errMsg string) error
-	UpdateFileText(fileID, text string, length int, ocrConf float64) error
+	UpdateFileParseResult(fileID string, pd *model.ParsedDocument) error
 	DeleteFileRecord(fileID string) error
 
 	// --- 调用日志 ---

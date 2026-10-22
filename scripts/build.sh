@@ -93,6 +93,25 @@ if [[ -n "$HTTP_PROXY_VAL" || -n "$HTTPS_PROXY_VAL" ]]; then
   )
 fi
 
+# ── HTTPS 自签证书 ────────────────────────────────────────────────
+CERT_DIR="$SCRIPT_DIR/dist"
+CERT_FILE="$CERT_DIR/cert.pem"
+KEY_FILE="$CERT_DIR/key.pem"
+
+ensure_cert() {
+  if [[ -f "$CERT_FILE" && -f "$KEY_FILE" ]]; then
+    echo "HTTPS 证书已存在: $CERT_FILE / $KEY_FILE"
+    return 0
+  fi
+  mkdir -p "$CERT_DIR"
+  echo "=== 生成 HTTPS 自签证书 ==="
+  openssl req -x509 -newkey rsa:2048 -keyout "$KEY_FILE" -out "$CERT_FILE" \
+    -days 3650 -nodes -subj "/CN=localhost/O=DocAI Gateway"
+  echo "  证书: $CERT_FILE"
+  echo "  私钥: $KEY_FILE"
+  echo "=== 证书生成完成 ==="
+}
+
 # ================================================================
 # Go toolchain (host-cached tarball, used by all Docker builds)
 # ================================================================
@@ -122,6 +141,7 @@ ensure_go_tarball() {
 # ================================================================
 build_windows() {
     echo "=== Building doc-ai-gateway.exe (Windows amd64) ==="
+    ensure_cert
     rm -rf dist/doc-ai-gateway.exe dist/doc-ai-gateway-windows-amd64*
 
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
@@ -154,6 +174,7 @@ build_windows() {
 # ================================================================
 build_linux_local() {
     echo "=== Building doc-ai-gateway (Linux amd64, local Go) ==="
+    ensure_cert
     rm -rf dist/doc-ai-gateway dist/doc-ai-gateway-linux-amd64*
 
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
@@ -184,6 +205,7 @@ build_linux_local() {
 # ================================================================
 build_linux_docker() {
     ensure_go_tarball
+    ensure_cert
 
     # 构建编译镜像
     if ! docker image inspect "$IMAGE" &>/dev/null; then
@@ -230,7 +252,7 @@ build_linux_docker() {
     echo "  Docker image: doc-ai-gateway:latest"
     echo "  Run with:"
     echo "    # data/ 包含数据库 cfg.db、上传文件、日志，容器停后数据不丢"
-    echo "    docker run -d --rm --name doc-ai-gateway -p 8080:8080 \\"
+    echo "    docker run -d --rm --name doc-ai-gateway -p 20001:20001 \\"
     echo "      -v \$(pwd)/data:/app/data \\"
     echo "      doc-ai-gateway:latest"
 }

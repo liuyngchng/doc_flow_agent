@@ -2,8 +2,10 @@
 # 此文件为模板，复制为 cfg.yml 后修改
 
 server:
-  port: 8080
+  port: 20001
   debug: false
+  cert_file: "dist/cert.pem"   # HTTPS 证书（build.sh 自动生成自签证书），留空则使用 HTTP
+  key_file: "dist/key.pem"     # HTTPS 私钥，留空则使用 HTTP
 
 sys:
   name: "DocAI Gateway"
@@ -12,3 +14,13 @@ sys:
 doc_parser:
   url: ""                   # 文档解析服务接口地址（解析文档并返回纯文本），留空则使用内置解析
   token: ""                 # 调用解析服务时的认证 token（可选）
+
+# 数据字典：把请求 JSON 中的字段名翻译成中文，便于 LLM 理解
+# key 为请求 JSON 的字段名，value 为对应的中文含义
+# 下面仅为格式示范，请按实际对接字段在 cfg.yml 中配置真实字典
+dict:
+  file_url: "文件链接"
+  file_type: "文件类型"
+  # 更多字段按需添加，例如：
+  # doc_type: "公文类型"
+  # secret_level: "密级"

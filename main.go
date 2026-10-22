@@ -164,6 +164,15 @@ func main() {
 	}()
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
+	if cfg.Server.CertFile != "" && cfg.Server.KeyFile != "" {
+		slog.Info("main_server_started", "addr", addr, "url", fmt.Sprintf("https://localhost%s", addr), "cert", cfg.Server.CertFile, "key", cfg.Server.KeyFile)
+		if err := r.RunTLS(addr, cfg.Server.CertFile, cfg.Server.KeyFile); err != nil {
+			slog.Error("main_server_start_failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	slog.Info("main_server_started", "addr", addr, "url", fmt.Sprintf("http://localhost%s", addr))
 	if err := r.Run(addr); err != nil {
 		slog.Error("main_server_start_failed", "error", err)

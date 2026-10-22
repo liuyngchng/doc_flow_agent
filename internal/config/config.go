@@ -14,7 +14,7 @@ import (
 func Load(path string) (*model.Config, error) {
 	cfg := &model.Config{
 		Server: model.ServerConfig{
-			Port: 8080,
+			Port: 20001,
 		},
 		Sys: model.SysConfig{
 			Name:     "Doc Gateway",
@@ -39,7 +39,7 @@ func Load(path string) (*model.Config, error) {
 	}
 
 	if cfg.Server.Port == 0 {
-		cfg.Server.Port = 8080
+		cfg.Server.Port = 20001
 	}
 	if cfg.Sys.Name == "" {
 		cfg.Sys.Name = "Doc Gateway"

@@ -153,9 +153,10 @@ type downloadedFiles struct {
 	MainBody    []string // 正文文本（可能多个，一般一个）
 	Attachments []string // 附件文本
 	DocBasis    []string // 办文依据文本
+	SealTexts   []string // 所有文件中检测到的印章文字（去重）
 }
 
-// downloadAllFileURLs 递归提取 body 中所有 file_url，下载并提取文本
+// downloadAllFileURLs 递归提取 body 中所有 file_url，下载、解析并入库
 func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *downloadedFiles {
 	items := extractFileURLs(body)
 	if len(items) == 0 {
@@ -167,6 +168,8 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *download
 
 	tmpDir := filepath.Join(h.basePath(), "tmp")
 	os.MkdirAll(tmpDir, 0755)
+
+	sealSeen := make(map[string]bool)
 
 	for i, item := range items {
 		slog.Info("call_download_file_url", "url", item.URL, "file_type", item.FileType)
@@ -196,17 +199,46 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *download
 		}
 		defer os.Remove(tmpFile)
 
-		// 提取文本
-		text := h.extractFileText(tmpFile)
-		if text == "" {
+		// 提取文本及印章信息
+		pd := h.extractFileText(tmpFile)
+		if pd == nil || pd.Text == "" {
 			slog.Warn("call_extract_empty", "url", item.URL)
 			continue
 		}
 
-		// 带文件名前缀的文本块
-		block := text
+		// 入库：file_url 下载的文件无本地持久路径，用 D- 前缀区分
+		fileID := fmt.Sprintf("D-%s%04d", time.Now().Format("20060102150405"), time.Now().Nanosecond()%10000)
+		record := &model.FileRecord{
+			FileID:        fileID,
+			OriginalName:  firstNonEmpty(item.FileName, filepath.Base(item.URL)),
+			FileType:      detectFileType(ext),
+			FilePath:      "",
+			TextContent:   pd.Text,
+			TextLength:    len(pd.Text),
+			OCRConfidence: pd.OCRConfidence,
+			HasSeal:       pd.HasSeal,
+			SealText:      pd.SealText,
+			Status:        model.FileStatusReady,
+		}
+		if err := h.store.CreateFileRecord(record); err != nil {
+			slog.Warn("call_download_store_failed", "url", item.URL, "error", err)
+		}
+
+		// 汇总印章文字
+		for _, s := range pd.SealText {
+			if s != "" && !sealSeen[s] {
+				sealSeen[s] = true
+				result.SealTexts = append(result.SealTexts, s)
+			}
+		}
+
+		// 带文件名和印章信息前缀的文本块
+		block := pd.Text
 		if item.FileName != "" {
-			block = fmt.Sprintf("【%s】\n%s", item.FileName, text)
+			block = fmt.Sprintf("【%s】\n%s", item.FileName, block)
+		}
+		if len(pd.SealText) > 0 {
+			block = block + "\n（印章文字：" + strings.Join(pd.SealText, "、") + "）"
 		}
 
 		switch item.FileType {
@@ -221,7 +253,7 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *download
 			result.MainBody = append(result.MainBody, block)
 		}
 
-		slog.Info("call_download_done", "url", item.URL, "file_type", item.FileType, "text_len", len(text))
+		slog.Info("call_download_done", "url", item.URL, "file_type", item.FileType, "text_len", len(pd.Text), "has_seal", pd.HasSeal)
 	}
 
 	return result
@@ -265,6 +297,16 @@ func extractFileURLs(v interface{}) []fileItem {
 	return items
 }
 
+// firstNonEmpty 返回第一个非空字符串
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // detectExtFromURL 从 URL 路径或 Content-Type 推断文件扩展名
 func detectExtFromURL(url string, contentType string) string {
 	// 去掉 query string
@@ -292,11 +334,11 @@ func detectExtFromURL(url string, contentType string) string {
 	}
 }
 
-// extractFileText 提取文件文本（本地或远程解析服务）
-func (h *CallHandler) extractFileText(localPath string) string {
+// extractFileText 提取文件文本及印章信息（本地或远程解析服务）
+func (h *CallHandler) extractFileText(localPath string) *model.ParsedDocument {
 	if h.cfg.DocParser.URL != "" {
-		if text, _, err := h.extractTextRemote(localPath); err == nil {
-			return text
+		if pd, err := h.extractTextRemote(localPath); err == nil {
+			return pd
 		}
 		slog.Warn("call_remote_parse_failed", "path", localPath)
 	}
@@ -305,16 +347,21 @@ func (h *CallHandler) extractFileText(localPath string) string {
 	result, err := preprocess.ExtractText(localPath)
 	if err != nil {
 		slog.Warn("call_local_parse_failed", "path", localPath, "error", err)
-		return ""
+		return nil
 	}
-	return result.Text
+	return &model.ParsedDocument{
+		Text:          result.Text,
+		OCRConfidence: result.OCRConfidence,
+		HasSeal:       false,
+		SealText:      []string{},
+	}
 }
 
-// extractTextRemote 调用外部文档解析服务
-func (h *CallHandler) extractTextRemote(localPath string) (string, float64, error) {
+// extractTextRemote 调用外部文档解析服务，返回完整解析结果
+func (h *CallHandler) extractTextRemote(localPath string) (*model.ParsedDocument, error) {
 	f, err := os.Open(localPath)
 	if err != nil {
-		return "", 0, fmt.Errorf("打开文件失败: %w", err)
+		return nil, fmt.Errorf("打开文件失败: %w", err)
 	}
 	defer f.Close()
 
@@ -322,16 +369,16 @@ func (h *CallHandler) extractTextRemote(localPath string) (string, float64, erro
 	writer := multipart.NewWriter(&body)
 	part, err := writer.CreateFormFile("file", filepath.Base(localPath))
 	if err != nil {
-		return "", 0, fmt.Errorf("创建 form 字段失败: %w", err)
+		return nil, fmt.Errorf("创建 form 字段失败: %w", err)
 	}
 	if _, err := io.Copy(part, f); err != nil {
-		return "", 0, fmt.Errorf("写入文件数据失败: %w", err)
+		return nil, fmt.Errorf("写入文件数据失败: %w", err)
 	}
 	writer.Close()
 
 	req, err := http.NewRequest(http.MethodPost, h.cfg.DocParser.URL, &body)
 	if err != nil {
-		return "", 0, fmt.Errorf("创建解析请求失败: %w", err)
+		return nil, fmt.Errorf("创建解析请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	if h.cfg.DocParser.Token != "" {
@@ -340,26 +387,47 @@ func (h *CallHandler) extractTextRemote(localPath string) (string, float64, erro
 
 	resp, err := docParserClient.Do(req)
 	if err != nil {
-		return "", 0, fmt.Errorf("调用文档解析服务失败: %w", err)
+		return nil, fmt.Errorf("调用文档解析服务失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", 0, fmt.Errorf("读取解析响应失败: %w", err)
+		return nil, fmt.Errorf("读取解析响应失败: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", 0, fmt.Errorf("文档解析服务返回错误状态码 %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("文档解析服务返回错误状态码 %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var parsed struct {
-		Text          string  `json:"text"`
-		OCRConfidence float64 `json:"ocr_confidence"`
+	pd := &model.ParsedDocument{}
+	if err := json.Unmarshal(respBody, pd); err != nil {
+		return nil, fmt.Errorf("解析 JSON 响应失败: %w", err)
 	}
-	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", 0, fmt.Errorf("解析 JSON 响应失败: %w", err)
+	return pd, nil
+}
+
+// translateJSON 将 JSON 中出现的 key 按 dict 翻译为中文，递归处理嵌套结构
+func translateJSON(v interface{}, dict map[string]string) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(val))
+		for k, vv := range val {
+			newKey := k
+			if cn, ok := dict[k]; ok && cn != "" {
+				newKey = cn
+			}
+			out[newKey] = translateJSON(vv, dict)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(val))
+		for i, item := range val {
+			out[i] = translateJSON(item, dict)
+		}
+		return out
+	default:
+		return v
 	}
-	return parsed.Text, parsed.OCRConfidence, nil
 }
 
 // renderPrompt 渲染提示词模板
@@ -369,6 +437,17 @@ func (h *CallHandler) renderPrompt(iface *model.InterfaceConfig, requestBody str
 	// 替换 {{request.body}} — 完整请求 JSON
 	result = replaceAll(result, "{{request.body}}", requestBody)
 	result = replaceAll(result, "{{request.json}}", requestBody) // 别名
+
+	// 数据字典翻译后的 JSON
+	if dict := h.cfg.Dict; len(dict) > 0 {
+		var raw map[string]interface{}
+		if json.Unmarshal([]byte(requestBody), &raw) == nil {
+			translated := translateJSON(raw, dict)
+			translatedJSON := mustJSON(translated)
+			result = replaceAll(result, "{{request.dict}}", translatedJSON)
+			result = replaceAll(result, "{{request.translated}}", translatedJSON) // 别名
+		}
+	}
 
 	if files != nil {
 		// {{file.main_body}} — 正文内容
@@ -388,6 +467,12 @@ func (h *CallHandler) renderPrompt(iface *model.InterfaceConfig, requestBody str
 			result = replaceAll(result, "{{file.doc_basis}}", strings.Join(files.DocBasis, "\n\n"))
 		} else {
 			result = replaceAll(result, "{{file.doc_basis}}", "")
+		}
+		// {{file.seal_text}} — 所有印章文字汇总
+		if len(files.SealTexts) > 0 {
+			result = replaceAll(result, "{{file.seal_text}}", strings.Join(files.SealTexts, "、"))
+		} else {
+			result = replaceAll(result, "{{file.seal_text}}", "无")
 		}
 		// {{file.all_text}} — 所有文件文本聚合
 		var allParts []string

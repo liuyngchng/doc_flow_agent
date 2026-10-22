@@ -63,12 +63,15 @@ type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Sys       SysConfig       `yaml:"sys"`
 	DocParser DocParserConfig `yaml:"doc_parser"`
+	Dict      map[string]string `yaml:"dict"` // 数据字典：请求 JSON key → 中文含义
 }
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Port  int  `yaml:"port"`
-	Debug bool `yaml:"debug"`
+	Port     int    `yaml:"port"`
+	Debug    bool   `yaml:"debug"`
+	CertFile string `yaml:"cert_file"` // HTTPS 证书文件路径，为空则使用 HTTP
+	KeyFile  string `yaml:"key_file"`  // HTTPS 私钥文件路径，为空则使用 HTTP
 }
 
 // SysConfig 系统配置
@@ -137,18 +140,28 @@ type InputParam struct {
 
 // FileRecord 上传文件记录
 type FileRecord struct {
-	ID            int64   `json:"id"`
-	FileID        string  `json:"file_id"`
-	OriginalName  string  `json:"original_name"`
-	FileType      string  `json:"file_type"`
-	FilePath      string  `json:"file_path"`
-	TextContent   string  `json:"-"`
-	TextLength    int     `json:"text_length"`
-	OCRConfidence float64 `json:"ocr_confidence,omitempty"`
-	Status        string  `json:"status"`
-	ErrorMessage  string  `json:"error_message,omitempty"`
-	BizID         string  `json:"biz_id"`
-	CreatedAt     string  `json:"created_at"`
+	ID            int64    `json:"id"`
+	FileID        string   `json:"file_id"`
+	OriginalName  string   `json:"original_name"`
+	FileType      string   `json:"file_type"`
+	FilePath      string   `json:"file_path"`
+	TextContent   string   `json:"-"`
+	TextLength    int      `json:"text_length"`
+	OCRConfidence float64  `json:"ocr_confidence,omitempty"`
+	HasSeal       bool     `json:"has_seal,omitempty"`
+	SealText      []string `json:"seal_text,omitempty"`
+	Status        string   `json:"status"`
+	ErrorMessage  string   `json:"error_message,omitempty"`
+	BizID         string   `json:"biz_id"`
+	CreatedAt     string   `json:"created_at"`
+}
+
+// ParsedDocument 文档解析结果（本地解析 / 远程解析服务统一返回）
+type ParsedDocument struct {
+	Text          string   `json:"text"`           // 提取的纯文本内容
+	OCRConfidence float64  `json:"ocr_confidence"` // OCR 置信度
+	HasSeal       bool     `json:"has_seal"`       // 是否检测到印章
+	SealText      []string `json:"seal_text"`      // 印章文字列表
 }
 
 // ============================================================

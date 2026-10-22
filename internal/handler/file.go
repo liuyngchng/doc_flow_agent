@@ -114,6 +114,8 @@ func (h *FileHandler) Status(c *gin.Context) {
 		"file_type":      record.FileType,
 		"text_length":    record.TextLength,
 		"ocr_confidence": record.OCRConfidence,
+		"has_seal":       record.HasSeal,
+		"seal_text":      record.SealText,
 		"error_message":  record.ErrorMessage,
 		"biz_id":         record.BizID,
 		"created_at":     record.CreatedAt,
@@ -142,7 +144,9 @@ func (h *FileHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	os.RemoveAll(filepath.Dir(record.FilePath))
+	if record.FilePath != "" {
+		os.RemoveAll(filepath.Dir(record.FilePath))
+	}
 	if err := h.store.DeleteFileRecord(fileID); err != nil {
 		c.JSON(500, gin.H{"error": "删除失败"})
 		return
@@ -154,19 +158,21 @@ func (h *FileHandler) Delete(c *gin.Context) {
 }
 
 func (h *FileHandler) processFile(fileID, localPath string) {
-	var (
-		text  string
-		conf  float64
-		err   error
-	)
+	var pd *model.ParsedDocument
+	var err error
 
 	if h.cfg.DocParser.URL != "" {
-		text, conf, err = h.extractTextRemote(localPath)
+		pd, err = h.extractTextRemote(localPath)
 	} else {
 		var result *preprocess.Result
 		result, err = preprocess.ExtractText(localPath)
 		if result != nil {
-			text, conf = result.Text, result.OCRConfidence
+			pd = &model.ParsedDocument{
+				Text:          result.Text,
+				OCRConfidence: result.OCRConfidence,
+				HasSeal:       false,
+				SealText:      []string{},
+			}
 		}
 	}
 
@@ -174,14 +180,14 @@ func (h *FileHandler) processFile(fileID, localPath string) {
 		h.store.UpdateFileStatus(fileID, model.FileStatusFailed, err.Error())
 		return
 	}
-	h.store.UpdateFileText(fileID, text, len(text), conf)
+	h.store.UpdateFileParseResult(fileID, pd)
 }
 
-// extractTextRemote 调用外部文档解析服务（multipart/form-data），获取纯文本内容
-func (h *FileHandler) extractTextRemote(localPath string) (string, float64, error) {
+// extractTextRemote 调用外部文档解析服务（multipart/form-data），返回完整解析结果
+func (h *FileHandler) extractTextRemote(localPath string) (*model.ParsedDocument, error) {
 	f, err := os.Open(localPath)
 	if err != nil {
-		return "", 0, fmt.Errorf("打开文件失败: %w", err)
+		return nil, fmt.Errorf("打开文件失败: %w", err)
 	}
 	defer f.Close()
 
@@ -190,16 +196,16 @@ func (h *FileHandler) extractTextRemote(localPath string) (string, float64, erro
 
 	part, err := writer.CreateFormFile("file", filepath.Base(localPath))
 	if err != nil {
-		return "", 0, fmt.Errorf("创建 form 字段失败: %w", err)
+		return nil, fmt.Errorf("创建 form 字段失败: %w", err)
 	}
 	if _, err := io.Copy(part, f); err != nil {
-		return "", 0, fmt.Errorf("写入文件数据失败: %w", err)
+		return nil, fmt.Errorf("写入文件数据失败: %w", err)
 	}
 	writer.Close()
 
 	req, err := http.NewRequest(http.MethodPost, h.cfg.DocParser.URL, &body)
 	if err != nil {
-		return "", 0, fmt.Errorf("创建解析请求失败: %w", err)
+		return nil, fmt.Errorf("创建解析请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	if h.cfg.DocParser.Token != "" {
@@ -208,26 +214,23 @@ func (h *FileHandler) extractTextRemote(localPath string) (string, float64, erro
 
 	resp, err := docParserClient.Do(req)
 	if err != nil {
-		return "", 0, fmt.Errorf("调用文档解析服务失败: %w", err)
+		return nil, fmt.Errorf("调用文档解析服务失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", 0, fmt.Errorf("读取解析响应失败: %w", err)
+		return nil, fmt.Errorf("读取解析响应失败: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", 0, fmt.Errorf("文档解析服务返回错误状态码 %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("文档解析服务返回错误状态码 %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var parsed struct {
-		Text          string  `json:"text"`
-		OCRConfidence float64 `json:"ocr_confidence"`
+	pd := &model.ParsedDocument{}
+	if err := json.Unmarshal(respBody, pd); err != nil {
+		return nil, fmt.Errorf("解析 JSON 响应失败: %w", err)
 	}
-	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", 0, fmt.Errorf("解析 JSON 响应失败: %w", err)
-	}
-	return parsed.Text, parsed.OCRConfidence, nil
+	return pd, nil
 }
 
 func (h *FileHandler) basePath() string {
