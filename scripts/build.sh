@@ -257,6 +257,9 @@ build_linux_docker() {
     echo "      doc_flow_agent:latest"
     echo "    # 查看运行日志"
     echo "    docker logs -f doc_flow_agent"
+
+	# 清理悬挂镜像（旧构建产生的 <none>:<none>）
+	docker image prune -f || true
 }
 
 case "${MODE:-docker}" in
