@@ -7,8 +7,10 @@
 - **文件预处理**：DOCX / 文字 PDF / XLSX 文本提取，支持印章检测
 - **可配置 LLM 接口**：管理员在 GUI 中配置提示词模板、输出 Schema，自动生成对外 API
 - **异步任务处理**：接收请求后立即返回 `{code, task_id, linkid}`，后台 Worker 下载文件→调用 LLM→回调结果
-- **任务管理**：支持查询进行中任务、取消排队中任务
-- **管理后台**：登录、AI 接口管理、LLM 模型配置、文件管理、调用日志、审稿模拟
+- **任务管理**：支持查询进行中任务、取消排队中任务、全链路追踪查询
+- **全链路追踪**：`task_trace` 表记录每一步的输入输出和时间线，包括 request_body / files_text / files_summary / llm_prompt / llm_raw_output / output_result / callback_body / timeline，失败原因写入 error_message
+- **管理后台**：登录、AI 接口管理、LLM 模型配置、文件管理、任务日志、审稿模拟
+- **权限控制**：admin 拥有全部管理权限；普通用户仅可查看任务日志
 
 ## 架构
 
@@ -19,8 +21,8 @@
     │                              ├── WorkerPool 异步消费（download → parse → LLM → callback）
     └──────── POST callback_url ◄──┘
                                    │
-                                   ├── Admin GUI (登录 + 接口/模型/文件/日志 CRUD)
-                                   └── GET/DELETE /api/v1/tasks (任务查询与取消)
+                                   ├── Admin GUI (登录 + 接口/模型/文件/任务日志/审稿模拟)
+                                   └── GET/DELETE /api/v1/tasks + GET /api/v1/task/trace (任务追踪)
 ```
 
 ## 快速开始
@@ -41,9 +43,12 @@ doc_flow_agent.exe         # 双击运行
 ### Linux / Docker
 
 ```bash
-scripts/build.sh           # 编译 + 构建 Docker 镜像
-docker run -p 20001:20001 -v $(pwd)/data:/app/data doc_flow_agent:latest
+scripts/build.sh               # 编译 + 构建 Docker 镜像
+scripts/deploy.sh start        # 启动容器（自动创建 llm_net 网络）
+scripts/deploy.sh logs         # 查看运行日志
 ```
+
+`deploy.sh` 支持 `start` / `stop` / `restart` / `logs`，可通过环境变量 `CONTAINER`、`HOST_PORT`、`DATA_DIR` 覆盖默认值。容器加入 `llm_net` 虚拟网桥后，可通过容器名访问同网络内的其他服务（如 `doc_parser.url = "http://doc-parser:9090/parse"`）。
 
 ## 对外 API（电子公文系统调用）
 
@@ -129,21 +134,23 @@ curl -k -X POST https://11.14.2.27:20001/api/files/upload \
 
 ## 管理后台 API
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET/POST | `/api/inner/interfaces` | AI 接口列表/创建 |
-| GET | `/api/inner/interfaces/:id` | 获取接口详情 |
-| PUT/DELETE | `/api/inner/interfaces/:id` | 更新/删除接口 |
-| POST | `/api/inner/interfaces/:id/test` | 测试接口 prompt 渲染 |
-| GET/POST | `/api/inner/llm-configs` | LLM 配置列表/创建 |
-| PUT/DELETE | `/api/inner/llm-configs/:id` | 更新/删除配置 |
-| PUT | `/api/inner/llm-configs/:id/default` | 设为默认 |
-| GET | `/api/inner/files` | 文件列表 |
-| DELETE | `/api/inner/files/:id` | 删除文件 |
-| GET | `/api/inner/call-logs` | 调用日志 |
-| GET/PUT | `/api/inner/config` | 系统配置 |
-| POST | `/api/inner/proofread/submit` | 审稿模拟 |
-| GET | `/api/inner/proofread/query/:task_id` | 审稿查询 |
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | `/api/inner/task-trace` | 任务追踪列表 | 所有用户 |
+| GET | `/api/inner/task-trace/:task_id` | 任务追踪详情 | 所有用户 |
+| GET/POST | `/api/inner/interfaces` | AI 接口列表/创建 | admin |
+| GET | `/api/inner/interfaces/:id` | 获取接口详情 | admin |
+| PUT/DELETE | `/api/inner/interfaces/:id` | 更新/删除接口 | admin |
+| POST | `/api/inner/interfaces/:id/test` | 测试接口 prompt 渲染 | admin |
+| GET/POST | `/api/inner/llm-configs` | LLM 配置列表/创建 | admin |
+| PUT/DELETE | `/api/inner/llm-configs/:id` | 更新/删除配置 | admin |
+| PUT | `/api/inner/llm-configs/:id/default` | 设为默认 | admin |
+| GET | `/api/inner/files` | 文件列表 | admin |
+| DELETE | `/api/inner/files/:id` | 删除文件 | admin |
+| GET/PUT | `/api/inner/config` | 系统配置 | admin |
+| POST | `/api/inner/proofread/submit` | 审稿模拟 | admin |
+| GET | `/api/inner/proofread/query/:task_id` | 审稿查询 | admin |
+| PUT | `/api/inner/user/password` | 修改密码 | 所有用户 |
 
 ## 接口工作流程
 
@@ -178,7 +185,7 @@ curl -k -X POST https://11.14.2.27:20001/api/files/upload \
 - 向 `callback_url` 发起 POST，Body 含完整的业务处理结果
 - 认证：`Authorization: Bearer {callback_url_token}`（token 在 `cfg.yml` 配置）
 - HTTPS 回调跳过证书验证（兼容自签证书）
-- 回调失败自动重试（默认 3 次，指数退避），重试耗尽后 ERROR 日志打印完整返回内容
+- 回调失败自动重试（默认 3 次，指数退避），失败原因写入 `task_trace.error_message`
 - 回调成功 → 任务状态 `completed`；失败耗尽 → 状态 `callback_fail`
 
 ### 任务状态机
@@ -268,9 +275,11 @@ doc_flow_agent/
 ├── web/                       # 内嵌 Web 资源
 │   ├── templates/             # HTML 模板
 │   └── static/                # CSS/JS
-├── scripts/                   # 编译脚本
-│   ├── build.sh               # Linux 编译
+├── scripts/                   # 编译/部署脚本
+│   ├── build.sh               # Linux 编译 + Docker 镜像
 │   ├── build.bat              # Windows 编译
+│   ├── deploy.sh              # 容器启动/停止/重启
+│   ├── dev.sh                 # 开发容器
 │   ├── Dockerfile             # 编译镜像
 │   └── Dockerfile.server      # 生产镜像
 └── dist/                      # 编译产物
