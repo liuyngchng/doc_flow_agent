@@ -44,8 +44,12 @@ func defaultConfig() *model.Config {
 			KeyFile:  "dist/key.pem",
 		},
 		Sys: model.SysConfig{
-			Name:     "doc_flow_agent",
-			BasePath: "data",
+			Name:                  "doc_flow_agent",
+			BasePath:              "data",
+			MaxConcurrentTasks:    5,
+			MaxPendingTasks:       10,
+			CallbackRetries:       3,
+			CallbackRetryInterval: 2,
 		},
 		DocParser: model.DocParserConfig{
 			URL: "",
@@ -62,6 +66,18 @@ func applyDefaults(cfg *model.Config) {
 	}
 	if cfg.Sys.BasePath == "" {
 		cfg.Sys.BasePath = "data"
+	}
+	if cfg.Sys.MaxConcurrentTasks <= 0 {
+		cfg.Sys.MaxConcurrentTasks = 5
+	}
+	if cfg.Sys.MaxPendingTasks <= 0 {
+		cfg.Sys.MaxPendingTasks = 10
+	}
+	if cfg.Sys.CallbackRetries <= 0 {
+		cfg.Sys.CallbackRetries = 3
+	}
+	if cfg.Sys.CallbackRetryInterval <= 0 {
+		cfg.Sys.CallbackRetryInterval = 2
 	}
 }
 

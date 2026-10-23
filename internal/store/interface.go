@@ -48,4 +48,12 @@ type MetaStore interface {
 	// --- 调用日志 ---
 	CreateCallLog(log *model.CallLog) error
 	ListCallLogs(fileID string, limit, offset int) ([]model.CallLog, int, error)
+
+	// --- 异步任务 ---
+	CreateAsyncTask(task *model.AsyncTask) error
+	UpdateAsyncTask(task *model.AsyncTask) error
+	GetAsyncTask(taskID string) (*model.AsyncTask, error)
+	DeleteAsyncTask(taskID string) error
+	ListRunningTasks() ([]model.AsyncTask, error) // pending + processing
+	CountRunningTasks() (int, error)              // pending + processing 计数
 }

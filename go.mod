@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/gin-gonic/gin v1.4.0
+	github.com/google/uuid v1.6.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	golang.org/x/crypto v0.48.0
@@ -15,7 +16,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/gin-contrib/sse v0.0.0-20190301062529-5545eab6dad3 // indirect
 	github.com/golang/protobuf v1.3.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/json-iterator/go v1.1.6 // indirect
 	github.com/lestrrat-go/strftime v1.2.0 // indirect

@@ -137,6 +137,22 @@ func (s *SQLiteStore) initSchema() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id)
 	);
+
+	CREATE TABLE IF NOT EXISTS async_tasks (
+		id              INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id         TEXT UNIQUE NOT NULL,
+		linkid          TEXT DEFAULT '',
+		interface_path  TEXT NOT NULL,
+		request_body    TEXT NOT NULL,
+		callback_url    TEXT NOT NULL,
+		status          TEXT NOT NULL DEFAULT 'pending',
+		output_result   TEXT DEFAULT '',
+		error_message   TEXT DEFAULT '',
+		elapsed_ms      INTEGER DEFAULT 0,
+		retry_count     INTEGER DEFAULT 0,
+		created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -148,6 +164,9 @@ func (s *SQLiteStore) initSchema() error {
 	// 兼容旧表：如果 has_seal / seal_text 列不存在则添加
 	s.db.Exec("ALTER TABLE files ADD COLUMN has_seal INTEGER DEFAULT 0")
 	s.db.Exec("ALTER TABLE files ADD COLUMN seal_text TEXT DEFAULT ''")
+
+	// 兼容旧表：如果 linkid 列不存在则添加（V2.0 异步改造新增）
+	s.db.Exec("ALTER TABLE async_tasks ADD COLUMN linkid TEXT DEFAULT ''")
 
 	// 创建默认 admin 账号 (admin/admin)
 	var count int
@@ -570,6 +589,72 @@ func (s *SQLiteStore) ListCallLogs(fileID string, limit, offset int) ([]model.Ca
 		logs = append(logs, l)
 	}
 	return logs, total, nil
+}
+
+// ============================================================
+// 异步任务
+// ============================================================
+
+func (s *SQLiteStore) CreateAsyncTask(task *model.AsyncTask) error {
+	_, err := s.db.Exec(
+		"INSERT INTO async_tasks (task_id, linkid, interface_path, request_body, callback_url, status, output_result, error_message, elapsed_ms, retry_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		task.TaskID, task.LinkID, task.InterfacePath, task.RequestBody, task.CallbackURL, task.Status, task.OutputResult, task.ErrorMessage, task.ElapsedMs, task.RetryCount,
+	)
+	return err
+}
+
+func (s *SQLiteStore) UpdateAsyncTask(task *model.AsyncTask) error {
+	_, err := s.db.Exec(
+		"UPDATE async_tasks SET status=?, output_result=?, error_message=?, elapsed_ms=?, retry_count=?, updated_at=CURRENT_TIMESTAMP WHERE task_id=?",
+		task.Status, task.OutputResult, task.ErrorMessage, task.ElapsedMs, task.RetryCount, task.TaskID,
+	)
+	return err
+}
+
+func (s *SQLiteStore) GetAsyncTask(taskID string) (*model.AsyncTask, error) {
+	t := &model.AsyncTask{}
+	err := s.db.QueryRow(
+		"SELECT id, task_id, COALESCE(linkid,''), interface_path, request_body, callback_url, status, COALESCE(output_result,''), COALESCE(error_message,''), elapsed_ms, retry_count, COALESCE(created_at,''), COALESCE(updated_at,'') FROM async_tasks WHERE task_id=?",
+		taskID,
+	).Scan(&t.ID, &t.TaskID, &t.LinkID, &t.InterfacePath, &t.RequestBody, &t.CallbackURL, &t.Status, &t.OutputResult, &t.ErrorMessage, &t.ElapsedMs, &t.RetryCount, &t.CreatedAt, &t.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (s *SQLiteStore) DeleteAsyncTask(taskID string) error {
+	_, err := s.db.Exec("DELETE FROM async_tasks WHERE task_id=?", taskID)
+	return err
+}
+
+func (s *SQLiteStore) ListRunningTasks() ([]model.AsyncTask, error) {
+	rows, err := s.db.Query(
+		"SELECT id, task_id, COALESCE(linkid,''), interface_path, request_body, callback_url, status, COALESCE(output_result,''), COALESCE(error_message,''), elapsed_ms, retry_count, COALESCE(created_at,''), COALESCE(updated_at,'') FROM async_tasks WHERE status IN ('pending','processing') ORDER BY id",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tasks []model.AsyncTask
+	for rows.Next() {
+		var t model.AsyncTask
+		if err := rows.Scan(&t.ID, &t.TaskID, &t.LinkID, &t.InterfacePath, &t.RequestBody, &t.CallbackURL, &t.Status, &t.OutputResult, &t.ErrorMessage, &t.ElapsedMs, &t.RetryCount, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, nil
+}
+
+func (s *SQLiteStore) CountRunningTasks() (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM async_tasks WHERE status IN ('pending','processing')").Scan(&count)
+	return count, err
 }
 
 // ============================================================

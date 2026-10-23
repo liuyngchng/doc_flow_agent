@@ -10,6 +10,7 @@ const (
 	ErrCodeFileUnreadable = 1003 // 文件不可读
 	ErrCodeAgentFail      = 1004 // 智能体分析失败（需人工）
 	ErrCodeTimeout        = 2001 // 接口超时
+	ErrCodeQueueFull      = 2002 // 任务队列已满
 	ErrCodeInternal       = 5000 // 内部错误
 )
 
@@ -76,8 +77,13 @@ type ServerConfig struct {
 
 // SysConfig 系统配置
 type SysConfig struct {
-	Name     string `yaml:"name"`
-	BasePath string `yaml:"base_path"`
+	Name                  string `yaml:"name"`
+	BasePath              string `yaml:"base_path"`
+	CallbackToken         string `yaml:"callback_url_token"`          // 回调 Bearer 认证 token
+	MaxConcurrentTasks    int    `yaml:"max_concurrent_tasks"`        // Worker 数，默认 5
+	MaxPendingTasks       int    `yaml:"max_pending_tasks"`           // 任务总数上限，默认 10
+	CallbackRetries       int    `yaml:"callback_retries"`            // 回调重试次数，默认 3
+	CallbackRetryInterval int    `yaml:"callback_retry_interval_sec"` // 重试基础间隔（秒），默认 2
 }
 
 // DocParserConfig 文档解析服务配置
@@ -162,6 +168,36 @@ type ParsedDocument struct {
 	OCRConfidence float64  `json:"ocr_confidence"` // OCR 置信度
 	HasSeal       bool     `json:"has_seal"`       // 是否检测到印章
 	SealText      []string `json:"seal_text"`      // 印章文字列表
+}
+
+// ============================================================
+// 异步任务
+// ============================================================
+
+const (
+	TaskStatusPending      = "pending"
+	TaskStatusProcessing   = "processing"
+	TaskStatusSuccess      = "success"
+	TaskStatusFailed       = "failed"
+	TaskStatusCompleted    = "completed"
+	TaskStatusCallbackFail = "callback_fail"
+)
+
+// AsyncTask 异步任务记录
+type AsyncTask struct {
+	ID            int64  `json:"id"`
+	TaskID        string `json:"task_id"`
+	LinkID        string `json:"link_id"` // 对方系统的 linkid（可能不唯一）
+	InterfacePath string `json:"interface_path"`
+	RequestBody   string `json:"request_body"`
+	CallbackURL   string `json:"callback_url"`
+	Status        string `json:"status"`
+	OutputResult  string `json:"output_result"`
+	ErrorMessage  string `json:"error_message"`
+	ElapsedMs     int64  `json:"elapsed_ms"`
+	RetryCount    int    `json:"retry_count"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 // ============================================================

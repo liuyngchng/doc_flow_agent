@@ -1,9 +1,10 @@
 -- ================================================================
--- DocAI Gateway - SQLite 数据库表结构参考
+-- doc_flow_agent — SQLite 数据库表结构参考
 -- ================================================================
 -- 说明：本文件仅供查看数据库结构，程序运行时不使用它。
 -- 程序首次启动会自动创建 cfg.db 并初始化以下所有表，
 -- 同时插入默认管理员账号 admin / admin（首次登录需修改密码）。
+-- V2.0 新增 async_tasks 表（异步任务）。
 -- ================================================================
 
 CREATE TABLE IF NOT EXISTS users (
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS llm_configs (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS ai_interfaces (
+CREATE TABLE IF NOT EXISTS agent_interfaces (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,                 -- 接口名称，如 "收文类型判断"
     path TEXT UNIQUE NOT NULL,          -- 接口路径，如 "receive-type"
@@ -62,6 +63,8 @@ CREATE TABLE IF NOT EXISTS files (
     text_content TEXT DEFAULT '',       -- 预处理提取的文本
     text_length INTEGER DEFAULT 0,
     ocr_confidence REAL,
+    has_seal INTEGER DEFAULT 0,         -- 是否检测到印章
+    seal_text TEXT DEFAULT '',          -- 印章文字列表 (JSON array)
     status TEXT DEFAULT 'processing',   -- processing/ready/failed
     error_message TEXT DEFAULT '',
     biz_id TEXT DEFAULT '',             -- 公文流程实例 ID
@@ -89,4 +92,20 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     enabled INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS async_tasks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id         TEXT UNIQUE NOT NULL,        -- 智能体自生成 UUID，全局唯一
+    linkid          TEXT DEFAULT '',             -- 对方系统的流程标识（不保证唯一）
+    interface_path  TEXT NOT NULL,               -- 对应的 AI 接口路径
+    request_body    TEXT NOT NULL,               -- 完整请求 JSON
+    callback_url    TEXT NOT NULL,               -- 回调地址
+    status          TEXT NOT NULL DEFAULT 'pending', -- pending/processing/success/failed/completed/callback_fail
+    output_result   TEXT DEFAULT '',             -- LLM 输出结果 JSON
+    error_message   TEXT DEFAULT '',             -- 错误信息
+    elapsed_ms      INTEGER DEFAULT 0,           -- 处理耗时
+    retry_count     INTEGER DEFAULT 0,           -- 回调重试次数
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );

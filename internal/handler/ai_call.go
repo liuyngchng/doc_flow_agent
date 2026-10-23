@@ -13,18 +13,19 @@ import (
 	"strings"
 	"time"
 
-	"doc_flow_agent/internal/llm"
 	"doc_flow_agent/internal/model"
 	"doc_flow_agent/internal/preprocess"
 	"doc_flow_agent/internal/store"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // CallHandler 通用调用处理器
 type CallHandler struct {
-	store store.MetaStore
-	cfg   *model.Config
+	store  store.MetaStore
+	cfg    *model.Config
+	worker *AsyncWorker
 }
 
 // NewCallHandler 创建处理器
@@ -32,12 +33,15 @@ func NewCallHandler(st store.MetaStore, cfg *model.Config) *CallHandler {
 	return &CallHandler{store: st, cfg: cfg}
 }
 
-// Call 通用调用
-// POST /api/v1/*interfacePath
-// 请求体：完整 JSON（透传给 LLM），内含 file_url 字段会被自动下载解析
-func (h *CallHandler) Call(c *gin.Context) {
-	startTime := time.Now()
+// SetWorker 注入 AsyncWorker（由 main.go 在初始化时调用）
+func (h *CallHandler) SetWorker(w *AsyncWorker) {
+	h.worker = w
+}
 
+// Call 通用调用（异步入口）
+// POST /api/v1/*interfacePath
+// 请求体：完整 JSON，必须含 linkid 和 callback_url
+func (h *CallHandler) Call(c *gin.Context) {
 	// 1. 获取接口路径（从 URL 通配部分提取）
 	interfacePath := strings.TrimPrefix(c.Param("interfacePath"), "/")
 	if interfacePath == "" || interfacePath == "/" {
@@ -46,7 +50,6 @@ func (h *CallHandler) Call(c *gin.Context) {
 	}
 
 	// 2. 读取完整请求体
-	var rawBody map[string]interface{}
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(400, model.NewErrorResponse(model.ErrCodeParamError, "读取请求体失败"))
@@ -56,6 +59,8 @@ func (h *CallHandler) Call(c *gin.Context) {
 		c.JSON(400, model.NewErrorResponse(model.ErrCodeParamError, "请求体为空"))
 		return
 	}
+
+	var rawBody map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &rawBody); err != nil {
 		c.JSON(400, model.NewErrorResponse(model.ErrCodeParamError, "请求体不是合法 JSON: "+err.Error()))
 		return
@@ -74,71 +79,72 @@ func (h *CallHandler) Call(c *gin.Context) {
 		return
 	}
 
-	// 4. 提取并下载所有 file_url
-	files := h.downloadAllFileURLs(rawBody)
-
-	// 5. 渲染 prompt
-	systemPrompt := h.buildSystemPrompt(iface)
-	userPrompt, err := h.renderPrompt(iface, string(bodyBytes), files)
-	if err != nil {
-		c.JSON(400, model.NewErrorResponse(model.ErrCodeParamError, err.Error()))
+	// 4. 提取 linkid（必填）
+	linkid, _ := rawBody["linkid"].(string)
+	if linkid == "" {
+		c.JSON(400, ginResponse{Code: model.ErrCodeParamError, Message: "缺少 linkid", TaskID: ""})
 		return
 	}
 
-	// 6. 获取 LLM 配置
-	llmCfg, err := h.getLLMConfig(iface)
-	if err != nil {
-		c.JSON(500, model.NewErrorResponse(model.ErrCodeInternal, err.Error()))
+	// 5. 提取 callback_url（必填）
+	callbackURL, _ := rawBody["callback_url"].(string)
+	if callbackURL == "" {
+		c.JSON(400, ginResponse{Code: model.ErrCodeParamError, Message: "缺少 callback_url", TaskID: ""})
 		return
 	}
 
-	// 7. 调用 LLM
-	client := llm.New(llmCfg.APIURI, llmCfg.APIKey, llmCfg.ModelName)
-
-	temperature := iface.Temperature
-	if temperature == nil {
-		t := llmCfg.Temperature
-		temperature = &t
+	// 6. 检查任务队列是否已满（running >= max_pending）
+	maxPending := h.cfg.Sys.MaxPendingTasks
+	if maxPending <= 0 {
+		maxPending = 10
 	}
-	maxTokens := iface.MaxTokens
-	if maxTokens == nil {
-		mt := llmCfg.MaxTokens
-		maxTokens = &mt
+	running, err := h.store.CountRunningTasks()
+	if err != nil {
+		slog.Error("call_count_running_failed", "error", err)
+		c.JSON(500, model.NewErrorResponse(model.ErrCodeInternal, "内部错误"))
+		return
+	}
+	if running >= maxPending {
+		maxConcurrent := h.cfg.Sys.MaxConcurrentTasks
+		if maxConcurrent <= 0 {
+			maxConcurrent = 5
+		}
+		msg := fmt.Sprintf("任务队列已满，当前处理中任务数 %d/%d（最大并发 %d，最大排队 %d），请稍后重试", running, maxPending, maxConcurrent, maxPending)
+		c.JSON(503, ginResponse{Code: model.ErrCodeQueueFull, Message: msg, TaskID: ""})
+		return
 	}
 
-	resultText, llmErr := client.Chat(systemPrompt, userPrompt, temperature, maxTokens)
-	elapsedMs := time.Since(startTime).Milliseconds()
+	// 7. 自生成全局唯一的 task_id（对方 linkid 可能不唯一，不依赖它做唯一键）
+	taskID := uuid.New().String()
 
-	// 8. 记录日志
-	logEntry := &model.CallLog{
-		FileID:        interfacePath + "-" + time.Now().Format("20060102150405"),
-		InterfaceID:   iface.ID,
+	// 8. 创建异步任务，存入 DB
+	task := &model.AsyncTask{
+		TaskID:        taskID,
+		LinkID:        linkid,
 		InterfacePath: interfacePath,
-		InputParams:   ellipsisJSON(string(bodyBytes), 2000),
-		ElapsedMs:     elapsedMs,
+		RequestBody:   string(bodyBytes),
+		CallbackURL:   callbackURL,
+		Status:        model.TaskStatusPending,
 	}
-
-	if llmErr != nil {
-		logEntry.Status = "error"
-		logEntry.ErrorMessage = llmErr.Error()
-		logEntry.OutputResult = "{}"
-		h.store.CreateCallLog(logEntry)
-
-		slog.Error("call_llm_error", "interface", interfacePath, "error", llmErr)
-		slog.Info("call_response", "interface", interfacePath, "status", "error", "error_msg", llmErr.Error(), "elapsed_ms", elapsedMs)
-		c.JSON(500, model.NewErrorResponse(model.ErrCodeInternal, "LLM 调用失败: "+llmErr.Error()))
+	if err := h.store.CreateAsyncTask(task); err != nil {
+		slog.Error("call_create_task_failed", "error", err, "task_id", taskID, "linkid", linkid)
+		c.JSON(500, ginResponse{Code: model.ErrCodeInternal, Message: "任务创建失败", TaskID: ""})
 		return
 	}
 
-	// 9. 解析 LLM 输出，包装为统一响应格式
-	output := h.wrapOutput(resultText, iface.OutputSchema)
-	logEntry.OutputResult = mustJSON(output)
-	logEntry.Status = "success"
-	h.store.CreateCallLog(logEntry)
+	// 9. 入队 Worker Pool
+	h.worker.Enqueue(taskID)
 
-	slog.Info("call_response", "interface", interfacePath, "status", "success", "elapsed_ms", elapsedMs)
+	slog.Info("call_accepted", "task_id", taskID, "linkid", linkid, "interface", interfacePath, "running", running+1, "max", maxPending)
+	c.JSON(200, ginResponse{Code: model.ErrCodeSuccess, Message: "success", TaskID: taskID, LinkID: linkid})
+}
 
-	c.JSON(200, output)
+// ginResponse 异步入口响应格式（含 task_id 和 linkid）
+type ginResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	TaskID  string `json:"task_id"`
+	LinkID  string `json:"linkid,omitempty"`
 }
 
 // fileItem 从请求 JSON 中提取的文件条目
@@ -157,7 +163,8 @@ type downloadedFiles struct {
 }
 
 // downloadAllFileURLs 递归提取 body 中所有 file_url，下载、解析并入库
-func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *downloadedFiles {
+// taskID 用于日志追踪，可为空
+func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}, taskID string) *downloadedFiles {
 	items := extractFileURLs(body)
 	if len(items) == 0 {
 		return nil
@@ -172,19 +179,19 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *download
 	sealSeen := make(map[string]bool)
 
 	for i, item := range items {
-		slog.Info("call_download_file_url", "url", item.URL, "file_type", item.FileType)
+		slog.Info("call_download_file_url", "task_id", taskID, "url", item.URL, "file_type", item.FileType)
 
 		// 下载文件
 		resp, err := dlClient.Get(item.URL)
 		if err != nil {
-			slog.Warn("call_download_failed", "url", item.URL, "error", err)
+			slog.Warn("call_download_failed", "task_id", taskID, "url", item.URL, "error", err)
 			continue
 		}
 
 		fileBody, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil || resp.StatusCode != http.StatusOK {
-			slog.Warn("call_download_failed", "url", item.URL, "status", resp.StatusCode, "error", err)
+			slog.Warn("call_download_failed", "task_id", taskID, "url", item.URL, "status", resp.StatusCode, "error", err)
 			continue
 		}
 
@@ -194,7 +201,7 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *download
 		// 写入临时文件
 		tmpFile := filepath.Join(tmpDir, fmt.Sprintf("dl_%d_%d%s", time.Now().UnixNano(), i, ext))
 		if err := os.WriteFile(tmpFile, fileBody, 0644); err != nil {
-			slog.Warn("call_tmp_write_failed", "url", item.URL, "error", err)
+			slog.Warn("call_tmp_write_failed", "task_id", taskID, "url", item.URL, "error", err)
 			continue
 		}
 		defer os.Remove(tmpFile)
@@ -202,7 +209,7 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *download
 		// 提取文本及印章信息
 		pd := h.extractFileText(tmpFile)
 		if pd == nil || pd.Text == "" {
-			slog.Warn("call_extract_empty", "url", item.URL)
+			slog.Warn("call_extract_empty", "task_id", taskID, "url", item.URL)
 			continue
 		}
 
@@ -221,7 +228,7 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *download
 			Status:        model.FileStatusReady,
 		}
 		if err := h.store.CreateFileRecord(record); err != nil {
-			slog.Warn("call_download_store_failed", "url", item.URL, "error", err)
+			slog.Warn("call_download_store_failed", "task_id", taskID, "url", item.URL, "error", err)
 		}
 
 		// 汇总印章文字
@@ -253,7 +260,7 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}) *download
 			result.MainBody = append(result.MainBody, block)
 		}
 
-		slog.Info("call_download_done", "url", item.URL, "file_type", item.FileType, "text_len", len(pd.Text), "has_seal", pd.HasSeal)
+		slog.Info("call_download_done", "task_id", taskID, "url", item.URL, "file_type", item.FileType, "text_len", len(pd.Text), "has_seal", pd.HasSeal)
 	}
 
 	return result

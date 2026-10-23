@@ -48,6 +48,10 @@ func main() {
 	// 初始化处理器
 	h := handler.New(cfg, metaStore)
 
+	// 启动异步 Worker Pool
+	h.Worker.Start()
+	defer h.Worker.Stop()
+
 	// 设置 Gin
 	if !cfg.Server.Debug {
 		gin.SetMode(gin.ReleaseMode)
@@ -157,12 +161,17 @@ func main() {
 	// 电子公文工作流调用接口（支持 X-Api-Key 或 Bearer token）
 	r.POST("/api/v1/*interfacePath", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
 
+	// 异步任务管理（查询进行中任务 / 取消排队中任务）
+	r.GET("/api/v1/tasks", h.Auth.APITokenMiddleware(), h.AsyncTask.ListTasks)
+	r.DELETE("/api/v1/tasks/:task_id", h.Auth.APITokenMiddleware(), h.AsyncTask.DeleteTask)
+
 	// 优雅退出
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		slog.Info("main_shutting_down")
+		h.Worker.Stop()
 		metaStore.Close()
 		os.Exit(0)
 	}()

@@ -10,6 +10,11 @@ server:
 sys:
   name: "doc_flow_agent"             # 应用名称
   base_path: ""             # 文件存储基础路径，留空用 data/
+  callback_url_token: ""             # 回调 Bearer 认证 token（对方私下提供）
+  max_concurrent_tasks: 5            # Worker 数量 = 同时调用 LLM 的任务数
+  max_pending_tasks: 10              # 任务总数上限（处理中 + 排队），超过后拒单
+  callback_retries: 3                # 回调失败最大重试次数
+  callback_retry_interval_sec: 2     # 回调重试基础间隔（秒），指数退避
 
 doc_parser:
   url: ""                   # 文档解析服务接口地址（解析文档并返回纯文本），留空则使用内置解析

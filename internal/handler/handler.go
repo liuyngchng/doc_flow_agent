@@ -17,11 +17,17 @@ type Handler struct {
 	CallLog   *CallLogHandler
 	User      *UserHandler
 	Proofread *ProofreadHandler
+	AsyncTask *AsyncTaskHandler
+	Worker    *AsyncWorker
 }
 
 // New 创建 Handler
 func New(cfg *model.Config, st store.MetaStore) *Handler {
 	auth := NewAuthHandler(cfg, st)
+	call := NewCallHandler(st, cfg)
+	worker := NewAsyncWorker(st, cfg)
+	call.SetWorker(worker)
+
 	return &Handler{
 		Config:    NewConfigHandler(cfg, st),
 		Auth:      auth,
@@ -29,9 +35,11 @@ func New(cfg *model.Config, st store.MetaStore) *Handler {
 		File:      NewFileHandler(cfg, st),
 		Interface: NewInterfaceHandler(st),
 		LLMConfig: NewLLMConfigHandler(st),
-		Call:      NewCallHandler(st, cfg),
+		Call:      call,
 		CallLog:   NewCallLogHandler(st),
 		User:      NewUserHandler(st, auth),
-			Proofread: NewProofreadHandler(st),
+		Proofread: NewProofreadHandler(st),
+		AsyncTask: NewAsyncTaskHandler(st, cfg),
+		Worker:    worker,
 	}
 }
