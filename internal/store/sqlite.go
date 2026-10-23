@@ -115,19 +115,6 @@ func (s *SQLiteStore) initSchema() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
-	CREATE TABLE IF NOT EXISTS call_logs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		file_id TEXT NOT NULL,
-		interface_id INTEGER DEFAULT 0,
-		interface_path TEXT NOT NULL,
-		input_params TEXT DEFAULT '{}',
-		output_result TEXT DEFAULT '{}',
-		status TEXT DEFAULT 'success',
-		error_message TEXT DEFAULT '',
-		elapsed_ms INTEGER DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
 	CREATE TABLE IF NOT EXISTS api_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
@@ -138,20 +125,26 @@ func (s *SQLiteStore) initSchema() error {
 		FOREIGN KEY (user_id) REFERENCES users(id)
 	);
 
-	CREATE TABLE IF NOT EXISTS async_tasks (
-		id              INTEGER PRIMARY KEY AUTOINCREMENT,
-		task_id         TEXT UNIQUE NOT NULL,
-		linkid          TEXT DEFAULT '',
-		interface_path  TEXT NOT NULL,
-		request_body    TEXT NOT NULL,
-		callback_url    TEXT NOT NULL,
-		status          TEXT NOT NULL DEFAULT 'pending',
-		output_result   TEXT DEFAULT '',
-		error_message   TEXT DEFAULT '',
-		elapsed_ms      INTEGER DEFAULT 0,
-		retry_count     INTEGER DEFAULT 0,
-		created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+	CREATE TABLE IF NOT EXISTS task_trace (
+		id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id            TEXT UNIQUE NOT NULL,
+		linkid             TEXT DEFAULT '',
+		interface_path     TEXT NOT NULL,
+		callback_url       TEXT NOT NULL,
+		request_body       TEXT NOT NULL,
+		status             TEXT NOT NULL DEFAULT 'pending',
+		error_message      TEXT DEFAULT '',
+		retry_count        INTEGER DEFAULT 0,
+		files_text         TEXT DEFAULT '',
+		files_summary      TEXT DEFAULT '',
+		llm_request_prompt TEXT DEFAULT '',
+		llm_raw_output     TEXT DEFAULT '',
+		output_result      TEXT DEFAULT '',
+		callback_body      TEXT DEFAULT '',
+		timeline           TEXT DEFAULT '',
+		finished_at        DATETIME DEFAULT NULL,
+		created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
@@ -164,9 +157,6 @@ func (s *SQLiteStore) initSchema() error {
 	// 兼容旧表：如果 has_seal / seal_text 列不存在则添加
 	s.db.Exec("ALTER TABLE files ADD COLUMN has_seal INTEGER DEFAULT 0")
 	s.db.Exec("ALTER TABLE files ADD COLUMN seal_text TEXT DEFAULT ''")
-
-	// 兼容旧表：如果 linkid 列不存在则添加（V2.0 异步改造新增）
-	s.db.Exec("ALTER TABLE async_tasks ADD COLUMN linkid TEXT DEFAULT ''")
 
 	// 创建默认 admin 账号 (admin/admin)
 	var count int
@@ -545,120 +535,86 @@ func (s *SQLiteStore) DeleteFileRecord(fileID string) error {
 }
 
 // ============================================================
-// 调用日志
+// 任务追踪
 // ============================================================
 
-func (s *SQLiteStore) CreateCallLog(log *model.CallLog) error {
+func (s *SQLiteStore) CreateTaskTrace(task *model.TaskTrace) error {
 	_, err := s.db.Exec(
-		"INSERT INTO call_logs (file_id, interface_id, interface_path, input_params, output_result, status, error_message, elapsed_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		log.FileID, log.InterfaceID, log.InterfacePath, log.InputParams, log.OutputResult, log.Status, log.ErrorMessage, log.ElapsedMs,
+		"INSERT INTO task_trace (task_id, linkid, interface_path, callback_url, request_body, status, files_text, files_summary, llm_request_prompt, llm_raw_output, output_result, callback_body, timeline, finished_at, retry_count, error_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		task.TaskID, task.LinkID, task.InterfacePath, task.CallbackURL, task.RequestBody, task.Status, task.FilesText, task.FilesSummary, task.LLMRequestPrompt, task.LLMRawOutput, task.OutputResult, task.CallbackBody, task.Timeline, nilIfEmpty(task.FinishedAt), task.RetryCount, task.ErrorMessage,
 	)
 	return err
 }
 
-func (s *SQLiteStore) ListCallLogs(fileID string, limit, offset int) ([]model.CallLog, int, error) {
-	var total int
-	var rows *sql.Rows
-	var err error
-
-	if fileID != "" {
-		s.db.QueryRow("SELECT COUNT(*) FROM call_logs WHERE file_id=?", fileID).Scan(&total)
-		rows, err = s.db.Query(
-			"SELECT id, file_id, COALESCE(interface_id,0), interface_path, input_params, output_result, status, COALESCE(error_message,''), elapsed_ms, COALESCE(created_at,'') FROM call_logs WHERE file_id=? ORDER BY id DESC LIMIT ? OFFSET ?",
-			fileID, limit, offset,
-		)
-	} else {
-		s.db.QueryRow("SELECT COUNT(*) FROM call_logs").Scan(&total)
-		rows, err = s.db.Query(
-			"SELECT id, file_id, COALESCE(interface_id,0), interface_path, input_params, output_result, status, COALESCE(error_message,''), elapsed_ms, COALESCE(created_at,'') FROM call_logs ORDER BY id DESC LIMIT ? OFFSET ?",
-			limit, offset,
-		)
-	}
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	var logs []model.CallLog
-	for rows.Next() {
-		var l model.CallLog
-		if err := rows.Scan(&l.ID, &l.FileID, &l.InterfaceID, &l.InterfacePath, &l.InputParams,
-			&l.OutputResult, &l.Status, &l.ErrorMessage, &l.ElapsedMs, &l.CreatedAt); err != nil {
-			return nil, 0, err
-		}
-		logs = append(logs, l)
-	}
-	return logs, total, nil
-}
-
-// ============================================================
-// 异步任务
-// ============================================================
-
-func (s *SQLiteStore) CreateAsyncTask(task *model.AsyncTask) error {
+func (s *SQLiteStore) UpdateTaskTrace(task *model.TaskTrace) error {
 	_, err := s.db.Exec(
-		"INSERT INTO async_tasks (task_id, linkid, interface_path, request_body, callback_url, status, output_result, error_message, elapsed_ms, retry_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		task.TaskID, task.LinkID, task.InterfacePath, task.RequestBody, task.CallbackURL, task.Status, task.OutputResult, task.ErrorMessage, task.ElapsedMs, task.RetryCount,
+		"UPDATE task_trace SET status=?, error_message=?, retry_count=?, files_text=?, files_summary=?, llm_request_prompt=?, llm_raw_output=?, output_result=?, callback_body=?, timeline=?, finished_at=?, updated_at=CURRENT_TIMESTAMP WHERE task_id=?",
+		task.Status, task.ErrorMessage, task.RetryCount, task.FilesText, task.FilesSummary, task.LLMRequestPrompt, task.LLMRawOutput, task.OutputResult, task.CallbackBody, task.Timeline, nilIfEmpty(task.FinishedAt), task.TaskID,
 	)
 	return err
 }
 
-func (s *SQLiteStore) UpdateAsyncTask(task *model.AsyncTask) error {
-	_, err := s.db.Exec(
-		"UPDATE async_tasks SET status=?, output_result=?, error_message=?, elapsed_ms=?, retry_count=?, updated_at=CURRENT_TIMESTAMP WHERE task_id=?",
-		task.Status, task.OutputResult, task.ErrorMessage, task.ElapsedMs, task.RetryCount, task.TaskID,
-	)
-	return err
-}
-
-func (s *SQLiteStore) GetAsyncTask(taskID string) (*model.AsyncTask, error) {
-	t := &model.AsyncTask{}
+func (s *SQLiteStore) GetTaskTrace(taskID string) (*model.TaskTrace, error) {
+	t := &model.TaskTrace{}
+	var finishedAt sql.NullString
 	err := s.db.QueryRow(
-		"SELECT id, task_id, COALESCE(linkid,''), interface_path, request_body, callback_url, status, COALESCE(output_result,''), COALESCE(error_message,''), elapsed_ms, retry_count, COALESCE(created_at,''), COALESCE(updated_at,'') FROM async_tasks WHERE task_id=?",
+		"SELECT id, task_id, COALESCE(linkid,''), interface_path, callback_url, request_body, status, COALESCE(error_message,''), retry_count, COALESCE(files_text,''), COALESCE(files_summary,''), COALESCE(llm_request_prompt,''), COALESCE(llm_raw_output,''), COALESCE(output_result,''), COALESCE(callback_body,''), COALESCE(timeline,''), finished_at, COALESCE(created_at,''), COALESCE(updated_at,'') FROM task_trace WHERE task_id=?",
 		taskID,
-	).Scan(&t.ID, &t.TaskID, &t.LinkID, &t.InterfacePath, &t.RequestBody, &t.CallbackURL, &t.Status, &t.OutputResult, &t.ErrorMessage, &t.ElapsedMs, &t.RetryCount, &t.CreatedAt, &t.UpdatedAt)
+	).Scan(&t.ID, &t.TaskID, &t.LinkID, &t.InterfacePath, &t.CallbackURL, &t.RequestBody, &t.Status, &t.ErrorMessage, &t.RetryCount, &t.FilesText, &t.FilesSummary, &t.LLMRequestPrompt, &t.LLMRawOutput, &t.OutputResult, &t.CallbackBody, &t.Timeline, &finishedAt, &t.CreatedAt, &t.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if finishedAt.Valid {
+		t.FinishedAt = finishedAt.String
+	}
 	return t, nil
 }
 
-func (s *SQLiteStore) DeleteAsyncTask(taskID string) error {
-	_, err := s.db.Exec("DELETE FROM async_tasks WHERE task_id=?", taskID)
+func (s *SQLiteStore) DeleteTaskTrace(taskID string) error {
+	_, err := s.db.Exec("DELETE FROM task_trace WHERE task_id=?", taskID)
 	return err
 }
 
-func (s *SQLiteStore) ListRunningTasks() ([]model.AsyncTask, error) {
+func (s *SQLiteStore) ListRunningTasks() ([]model.TaskTrace, error) {
 	rows, err := s.db.Query(
-		"SELECT id, task_id, COALESCE(linkid,''), interface_path, request_body, callback_url, status, COALESCE(output_result,''), COALESCE(error_message,''), elapsed_ms, retry_count, COALESCE(created_at,''), COALESCE(updated_at,'') FROM async_tasks WHERE status IN ('pending','processing') ORDER BY id",
+		"SELECT id, task_id, COALESCE(linkid,''), interface_path, callback_url, request_body, status, COALESCE(error_message,''), retry_count, COALESCE(files_text,''), COALESCE(files_summary,''), COALESCE(llm_request_prompt,''), COALESCE(llm_raw_output,''), COALESCE(output_result,''), COALESCE(callback_body,''), COALESCE(timeline,''), finished_at, COALESCE(created_at,''), COALESCE(updated_at,'') FROM task_trace WHERE status IN ('pending','processing') ORDER BY id",
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var tasks []model.AsyncTask
-	for rows.Next() {
-		var t model.AsyncTask
-		if err := rows.Scan(&t.ID, &t.TaskID, &t.LinkID, &t.InterfacePath, &t.RequestBody, &t.CallbackURL, &t.Status, &t.OutputResult, &t.ErrorMessage, &t.ElapsedMs, &t.RetryCount, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, t)
+	return scanTaskTraces(rows)
+}
+
+func (s *SQLiteStore) ListTaskTraces(limit, offset int) ([]model.TaskTrace, int, error) {
+	var total int
+	s.db.QueryRow("SELECT COUNT(*) FROM task_trace").Scan(&total)
+
+	rows, err := s.db.Query(
+		"SELECT id, task_id, COALESCE(linkid,''), interface_path, callback_url, request_body, status, COALESCE(error_message,''), retry_count, COALESCE(files_text,''), COALESCE(files_summary,''), COALESCE(llm_request_prompt,''), COALESCE(llm_raw_output,''), COALESCE(output_result,''), COALESCE(callback_body,''), COALESCE(timeline,''), finished_at, COALESCE(created_at,''), COALESCE(updated_at,'') FROM task_trace ORDER BY id DESC LIMIT ? OFFSET ?",
+		limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
 	}
-	return tasks, nil
+	defer rows.Close()
+
+	tasks, err := scanTaskTraces(rows)
+	return tasks, total, err
 }
 
 func (s *SQLiteStore) CountRunningTasks() (int, error) {
 	var count int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM async_tasks WHERE status IN ('pending','processing')").Scan(&count)
+	err := s.db.QueryRow("SELECT COUNT(*) FROM task_trace WHERE status IN ('pending','processing')").Scan(&count)
 	return count, err
 }
 
 // PruneOldRecords 清理超过 retentionDays 天的运行时数据，返回被删文件的磁盘路径列表
-// 清理范围：async_tasks（终态）、call_logs、files（含用户上传和临时下载）
+// 清理范围：task_trace（终态）、files（含用户上传和临时下载）
 // 不动：users、sys_config、llm_configs、agent_interfaces、api_tokens
 func (s *SQLiteStore) PruneOldRecords(retentionDays int) ([]string, error) {
 	cutoff := fmt.Sprintf("-%d days", retentionDays)
@@ -681,24 +637,17 @@ func (s *SQLiteStore) PruneOldRecords(retentionDays int) ([]string, error) {
 		}
 	}
 
-	// 2. async_tasks：只删终态
+	// 2. task_trace：只删终态
 	res, err := s.db.Exec(
-		"DELETE FROM async_tasks WHERE status IN ('success','failed','completed','callback_fail') AND updated_at < datetime('now', ?)",
+		"DELETE FROM task_trace WHERE status IN ('success','failed','completed','callback_fail') AND updated_at < datetime('now', ?)",
 		cutoff,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("清理 async_tasks 失败: %w", err)
+		return nil, fmt.Errorf("清理 task_trace 失败: %w", err)
 	}
 	nTasks, _ := res.RowsAffected()
 
-	// 3. call_logs
-	res, err = s.db.Exec("DELETE FROM call_logs WHERE created_at < datetime('now', ?)", cutoff)
-	if err != nil {
-		return nil, fmt.Errorf("清理 call_logs 失败: %w", err)
-	}
-	nLogs, _ := res.RowsAffected()
-
-	// 4. files
+	// 3. files
 	res, err = s.db.Exec("DELETE FROM files WHERE created_at < datetime('now', ?)", cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("清理 files 失败: %w", err)
@@ -707,8 +656,7 @@ func (s *SQLiteStore) PruneOldRecords(retentionDays int) ([]string, error) {
 
 	slog.Info("prune_records",
 		"retention_days", retentionDays,
-		"deleted_async_tasks", nTasks,
-		"deleted_call_logs", nLogs,
+		"deleted_task_traces", nTasks,
 		"deleted_files", nFiles,
 		"disk_paths_to_remove", len(filePaths),
 	)
@@ -725,6 +673,29 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+func nilIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+func scanTaskTraces(rows *sql.Rows) ([]model.TaskTrace, error) {
+	var tasks []model.TaskTrace
+	for rows.Next() {
+		var t model.TaskTrace
+		var finishedAt sql.NullString
+		if err := rows.Scan(&t.ID, &t.TaskID, &t.LinkID, &t.InterfacePath, &t.CallbackURL, &t.RequestBody, &t.Status, &t.ErrorMessage, &t.RetryCount, &t.FilesText, &t.FilesSummary, &t.LLMRequestPrompt, &t.LLMRawOutput, &t.OutputResult, &t.CallbackBody, &t.Timeline, &finishedAt, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if finishedAt.Valid {
+			t.FinishedAt = finishedAt.String
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, nil
 }
 
 func scanInterfaceConfig(scanner interface{ Scan(...interface{}) error }) (*model.InterfaceConfig, error) {

@@ -21,6 +21,28 @@ func NewAsyncTaskHandler(st store.MetaStore, cfg *model.Config) *AsyncTaskHandle
 	return &AsyncTaskHandler{store: st, cfg: cfg}
 }
 
+// Trace GET /api/v1/task/trace?taskid=xxx — 查询任务全链路追踪
+func (h *AsyncTaskHandler) Trace(c *gin.Context) {
+	taskID := c.Query("taskid")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(model.ErrCodeParamError, "缺少 taskid 参数"))
+		return
+	}
+
+	trace, err := h.store.GetTaskTrace(taskID)
+	if err != nil {
+		slog.Error("task_trace_query_failed", "error", err, "taskid", taskID)
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(model.ErrCodeInternal, "查询失败"))
+		return
+	}
+	if trace == nil {
+		c.JSON(http.StatusOK, model.NewErrorResponse(model.ErrCodeParamError, "任务不存在: "+taskID))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.NewSuccessResponse(trace))
+}
+
 // ListTasks GET /api/v1/tasks — 查询进行中任务
 func (h *AsyncTaskHandler) ListTasks(c *gin.Context) {
 	tasks, err := h.store.ListRunningTasks()
@@ -45,7 +67,6 @@ func (h *AsyncTaskHandler) ListTasks(c *gin.Context) {
 		InterfacePath string `json:"interface_path"`
 		Status        string `json:"status"`
 		CallbackURL   string `json:"callback_url"`
-		ElapsedMs     int64  `json:"elapsed_ms"`
 		CreatedAt     string `json:"created_at"`
 	}
 
@@ -57,7 +78,6 @@ func (h *AsyncTaskHandler) ListTasks(c *gin.Context) {
 			InterfacePath: t.InterfacePath,
 			Status:        t.Status,
 			CallbackURL:   t.CallbackURL,
-			ElapsedMs:     t.ElapsedMs,
 			CreatedAt:     t.CreatedAt,
 		})
 	}
@@ -78,7 +98,7 @@ func (h *AsyncTaskHandler) DeleteTask(c *gin.Context) {
 		return
 	}
 
-	task, err := h.store.GetAsyncTask(taskID)
+	task, err := h.store.GetTaskTrace(taskID)
 	if err != nil {
 		slog.Error("async_delete_task_failed", "error", err, "task_id", taskID)
 		c.JSON(http.StatusInternalServerError, ginResponse{Code: model.ErrCodeInternal, Message: "查询任务失败", TaskID: ""})
@@ -91,7 +111,7 @@ func (h *AsyncTaskHandler) DeleteTask(c *gin.Context) {
 
 	switch task.Status {
 	case model.TaskStatusPending:
-		if err := h.store.DeleteAsyncTask(taskID); err != nil {
+		if err := h.store.DeleteTaskTrace(taskID); err != nil {
 			slog.Error("async_delete_task_failed", "error", err, "task_id", taskID)
 			c.JSON(http.StatusInternalServerError, ginResponse{Code: model.ErrCodeInternal, Message: "删除任务失败", TaskID: ""})
 			return

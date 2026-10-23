@@ -373,25 +373,79 @@ async function deleteFile(fileId) {
 }
 
 // ============================================================
-// 日志查阅
+// 任务日志
 // ============================================================
 async function loadLogs() {
     try {
-        var resp = await fetch('/api/inner/call-logs'); var json = await resp.json();
+        var resp = await fetch('/api/inner/task-trace'); var json = await resp.json();
         var data = json.data || [];
         var tbody = document.getElementById('logsTbody');
-        if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">暂无日志</td></tr>'; return; }
-        tbody.innerHTML = data.map(function(l) {
-            var badge = l.status === 'success' ? 'badge-success' : 'badge-danger';
+        if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">暂无任务记录</td></tr>'; return; }
+        tbody.innerHTML = data.map(function(t) {
+            var badge = statusBadge(t.status);
             return '<tr>' +
-                '<td><code>' + l.file_id + '</code></td>' +
-                '<td><code>' + esc(l.interface_path) + '</code></td>' +
-                '<td><span class="badge ' + badge + '">' + l.status + '</span></td>' +
-                '<td>' + l.elapsed_ms + 'ms</td>' +
-                '<td>' + l.created_at + '</td>' +
+                '<td><code>' + esc(t.task_id).substring(0, 8) + '...</code></td>' +
+                '<td>' + esc(t.linkid || '-') + '</td>' +
+                '<td><code>' + esc(t.interface_path) + '</code></td>' +
+                '<td><span class="badge ' + badge + '">' + t.status + '</span></td>' +
+                '<td>' + t.created_at + '</td>' +
+                '<td><button class="cfg-btn cfg-btn-reset" onclick="showTaskDetail(\'' + t.task_id + '\')" style="padding:4px 10px;font-size:0.8rem;">详情</button></td>' +
             '</tr>';
         }).join('');
-    } catch (err) { toast('加载日志失败: ' + err.message, 'error'); }
+    } catch (err) { toast('加载任务日志失败: ' + err.message, 'error'); }
+}
+
+function statusBadge(status) {
+    switch (status) {
+        case 'success': case 'completed': return 'badge-success';
+        case 'processing': return 'badge-warning';
+        case 'pending': return 'badge-gray';
+        default: return 'badge-danger';
+    }
+}
+
+async function showTaskDetail(taskId) {
+    try {
+        var resp = await fetch('/api/inner/task-trace/' + encodeURIComponent(taskId));
+        var json = await resp.json();
+        var t = json.data;
+        if (!t) { toast('任务不存在', 'error'); return; }
+
+        var detailEl = document.getElementById('taskDetailContent');
+        detailEl.innerHTML =
+            '<table class="kv-table">' +
+            '<tr><td class="kv-key">task_id</td><td><code>' + esc(t.task_id) + '</code></td></tr>' +
+            '<tr><td class="kv-key">linkid</td><td>' + esc(t.linkid || '-') + '</td></tr>' +
+            '<tr><td class="kv-key">接口路径</td><td><code>' + esc(t.interface_path) + '</code></td></tr>' +
+            '<tr><td class="kv-key">状态</td><td><span class="badge ' + statusBadge(t.status) + '">' + t.status + '</span></td></tr>' +
+            '<tr><td class="kv-key">重试次数</td><td>' + t.retry_count + '</td></tr>' +
+            '<tr><td class="kv-key">回调地址</td><td><code style="word-break:break-all;">' + esc(t.callback_url) + '</code></td></tr>' +
+            '<tr><td class="kv-key">错误信息</td><td style="color:#c62828;">' + esc(t.error_message || '-') + '</td></tr>' +
+            '<tr><td class="kv-key">创建时间</td><td>' + t.created_at + '</td></tr>' +
+            '<tr><td class="kv-key">完成时间</td><td>' + (t.finished_at || '-') + '</td></tr>' +
+            '</table>' +
+            codeSection('请求体 (request_body)', t.request_body) +
+            codeSection('文件摘要 (files_summary)', t.files_summary) +
+            codeSection('LLM Prompt', t.llm_request_prompt) +
+            codeSection('LLM 原始输出 (llm_raw_output)', t.llm_raw_output) +
+            codeSection('最终输出 (output_result)', t.output_result) +
+            codeSection('回调请求体 (callback_body)', t.callback_body) +
+            codeSection('时间线 (timeline)', t.timeline);
+
+        document.getElementById('taskDetailModal').classList.add('show');
+    } catch (err) { toast('查询失败: ' + err.message, 'error'); }
+}
+
+function codeSection(title, jsonStr) {
+    if (!jsonStr || jsonStr === '{}' || jsonStr === '[]' || jsonStr === '') return '';
+    var formatted = jsonStr;
+    try { formatted = JSON.stringify(JSON.parse(jsonStr), null, 2); } catch (_) {}
+    return '<h4 class="kv-section">' + esc(title) + '</h4>' +
+        '<pre class="task-detail-json">' + esc(formatted) + '</pre>';
+}
+
+function hideTaskDetail() {
+    document.getElementById('taskDetailModal').classList.remove('show');
 }
 
 // ============================================================
@@ -427,77 +481,9 @@ async function oaCall() {
         var json = await resp.json();
         var result = JSON.stringify(json, null, 2);
         document.getElementById('oaResult').textContent = result + '\n\n--- 受理耗时: ' + elapsed + 'ms ---';
-
-        // 异步接口：拿到 task_id 后自动开始监听日志
-        if (json.task_id) {
-            lastTaskId = json.task_id;
-            startLogStream();
-        } else {
-            document.getElementById('oaLog').textContent = '受理失败，无 task_id，无法监听日志。';
-        }
     } catch (err) {
         document.getElementById('oaResult').textContent = '调用失败: ' + err.message;
     }
-}
-
-// ============================================================
-// 日志流（tail -f app.log | grep task_id）
-// ============================================================
-var logEventSource = null;
-var lastTaskId = '';
-
-function startLogStream() {
-    var taskId = lastTaskId || '';
-    if (!taskId) {
-        toast('请先调用接口获取 task_id', 'error');
-        return;
-    }
-
-    stopLogStream();
-
-    var logEl = document.getElementById('oaLog');
-    logEl.textContent = '>>> 监听 task_id=' + taskId + ' 的日志...\n';
-
-    logEventSource = new EventSource('/api/inner/logs/stream?task_id=' + encodeURIComponent(taskId));
-
-    logEventSource.addEventListener('ready', function(e) {
-        logEl.textContent += e.data + '\n';
-        logEl.scrollTop = logEl.scrollHeight;
-    });
-
-    logEventSource.addEventListener('log', function(e) {
-        logEl.textContent += e.data + '\n';
-        // 限制最大行数，避免无限增长
-        var lines = logEl.textContent.split('\n');
-        if (lines.length > 500) {
-            logEl.textContent = lines.slice(lines.length - 500).join('\n');
-        }
-        logEl.scrollTop = logEl.scrollHeight;
-    });
-
-    logEventSource.addEventListener('error', function(e) {
-        if (e.data) logEl.textContent += e.data + '\n';
-        document.getElementById('logStatus').textContent = '连接中断';
-    });
-
-    logEventSource.onerror = function() {
-        document.getElementById('logStatus').textContent = '连接已断开';
-        stopLogStream();
-    };
-
-    document.getElementById('btnLogStart').disabled = true;
-    document.getElementById('btnLogStop').disabled = false;
-    document.getElementById('logStatus').textContent = '监听中...';
-}
-
-function stopLogStream() {
-    if (logEventSource) {
-        logEventSource.close();
-        logEventSource = null;
-    }
-    document.getElementById('btnLogStart').disabled = false;
-    document.getElementById('btnLogStop').disabled = true;
-    document.getElementById('logStatus').textContent = '';
 }
 
 // ============================================================

@@ -167,8 +167,9 @@ func main() {
 		v1.GET("/files", h.File.List)
 		v1.DELETE("/files/:file_id", h.File.Delete)
 
-		// 调用日志
-		v1.GET("/call-logs", h.CallLog.List)
+		// 任务追踪
+		v1.GET("/task-trace", h.CallLog.List)
+		v1.GET("/task-trace/:task_id", h.CallLog.Get)
 
 		// 用户管理
 		v1.GET("/users", h.User.ListUsers)
@@ -179,9 +180,6 @@ func main() {
 		v1.POST("/proofread/submit", h.Proofread.Submit)
 		v1.GET("/proofread/query/:task_id", h.Proofread.Query)
 		v1.GET("/proofread/state", h.Proofread.State)
-
-		// 日志流（操作模拟：实时查看 task_id 相关日志）
-		v1.GET("/logs/stream", handler.LogStream)
 	}
 
 	// 用户自助 API
@@ -200,9 +198,10 @@ func main() {
 	// 电子公文工作流调用接口（支持 X-Api-Key 或 Bearer token）
 	r.POST("/api/v1/*interfacePath", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
 
-	// 异步任务管理（查询进行中任务 / 取消排队中任务）
+	// 异步任务管理（查询进行中任务 / 取消排队中任务 / 查看任务追踪）
 	r.GET("/api/v1/tasks", h.Auth.APITokenMiddleware(), h.AsyncTask.ListTasks)
 	r.DELETE("/api/v1/tasks/:task_id", h.Auth.APITokenMiddleware(), h.AsyncTask.DeleteTask)
+	r.GET("/api/v1/task/trace", h.Auth.APITokenMiddleware(), h.AsyncTask.Trace)
 
 	// 优雅退出
 	go func() {

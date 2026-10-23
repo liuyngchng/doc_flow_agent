@@ -75,7 +75,18 @@ curl -k -X POST https://11.14.2.27:20001/api/v1/document/classify \
 
 接口路径通过管理后台配置创建，所有 `POST /api/v1/*` 统一走异步处理流程。
 
-### 2. 查询进行中任务
+### 2. 查询任务追踪
+
+```bash
+curl -k -X GET "https://11.14.2.27:20001/api/v1/task/trace?taskid=a1b2c3d4-e5f6-..."
+  -H "X-Api-Key: edoc_sk_xxxxxxxxxxxx"
+
+# 返回: 完整 task_trace 记录，包含 request_body / files_text / llm_request_prompt /
+#        llm_raw_output / output_result / callback_body / timeline 等全链路数据
+# {"code": 0, "message": "success", "data": {...}}
+```
+
+### 3. 查询进行中任务
 
 ```bash
 curl -k -X GET https://11.14.2.27:20001/api/v1/tasks \
@@ -85,7 +96,7 @@ curl -k -X GET https://11.14.2.27:20001/api/v1/tasks \
 # {"code": 0, "message": "success", "data": {"total": 2, "max_concurrent": 5, "tasks": [...]}}
 ```
 
-### 3. 取消排队中任务
+### 4. 取消排队中任务
 
 ```bash
 curl -k -X DELETE https://11.14.2.27:20001/api/v1/tasks/doc_20261020_0001 \
@@ -97,14 +108,14 @@ curl -k -X DELETE https://11.14.2.27:20001/api/v1/tasks/doc_20261020_0001 \
 
 > 仅 `pending` 状态的任务可取消；`processing`（LLM 调用中）状态不可取消。
 
-### 4. 健康检查
+### 5. 健康检查
 
 ```bash
 curl -k --tlsv1 --noproxy '*' -w'\n' https://11.14.2.27:20001/health
 # 返回: {"status":"ok"}
 ```
 
-### 5. 文件上传（回传）
+### 6. 文件上传（回传）
 
 ```bash
 curl -k -X POST https://11.14.2.27:20001/api/files/upload \
@@ -188,13 +199,12 @@ pending → processing → success/failed → completed/callback_fail
 
 | 表 | 清理范围 | 默认保留 |
 |----|---------|---------|
-| `async_tasks` | 终态记录（`completed` / `callback_fail` / `success` / `failed`），`pending` 和 `processing` 不删 | 30 天 |
-| `call_logs` | 全部记录 | 30 天 |
+| `task_trace` | 终态记录（`completed` / `callback_fail` / `success` / `failed`），`pending` 和 `processing` 不删 | 30 天 |
 | `files` | 全部记录（含用户上传和临时下载），磁盘文件同步删除；文件已不存在时仅 `WARN` 不报错 | 30 天 |
 
 **不动**的系统表：`users`、`sys_config`、`llm_configs`、`agent_interfaces`、`api_tokens`。
 
-清理操作会写入日志：`prune_records deleted_async_tasks=N deleted_call_logs=N deleted_files=N disk_paths_to_remove=N`
+清理操作会写入日志：`prune_records deleted_task_traces=N deleted_files=N disk_paths_to_remove=N`
 
 ### 日志文件
 

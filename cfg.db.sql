@@ -4,7 +4,6 @@
 -- 说明：本文件仅供查看数据库结构，程序运行时不使用它。
 -- 程序首次启动会自动创建 cfg.db 并初始化以下所有表，
 -- 同时插入默认管理员账号 admin / admin（首次登录需修改密码）。
--- V2.0 新增 async_tasks 表（异步任务）。
 -- ================================================================
 
 CREATE TABLE IF NOT EXISTS users (
@@ -71,19 +70,6 @@ CREATE TABLE IF NOT EXISTS files (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS call_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_id TEXT NOT NULL,
-    interface_id INTEGER DEFAULT 0,
-    interface_path TEXT NOT NULL,
-    input_params TEXT DEFAULT '{}',
-    output_result TEXT DEFAULT '{}',
-    status TEXT DEFAULT 'success',      -- success/error
-    error_message TEXT DEFAULT '',
-    elapsed_ms INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS api_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     token TEXT UNIQUE NOT NULL,
@@ -94,18 +80,24 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE TABLE IF NOT EXISTS async_tasks (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id         TEXT UNIQUE NOT NULL,        -- 智能体自生成 UUID，全局唯一
-    linkid          TEXT DEFAULT '',             -- 对方系统的流程标识（不保证唯一）
-    interface_path  TEXT NOT NULL,               -- 对应的 AI 接口路径
-    request_body    TEXT NOT NULL,               -- 完整请求 JSON
-    callback_url    TEXT NOT NULL,               -- 回调地址
-    status          TEXT NOT NULL DEFAULT 'pending', -- pending/processing/success/failed/completed/callback_fail
-    output_result   TEXT DEFAULT '',             -- LLM 输出结果 JSON
-    error_message   TEXT DEFAULT '',             -- 错误信息
-    elapsed_ms      INTEGER DEFAULT 0,           -- 处理耗时
-    retry_count     INTEGER DEFAULT 0,           -- 回调重试次数
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS task_trace (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id            TEXT UNIQUE NOT NULL,         -- 智能体自生成 UUID，全局唯一
+    linkid             TEXT DEFAULT '',              -- 对方系统的流程标识
+    interface_path     TEXT NOT NULL,                -- 对应的 AI 接口路径
+    callback_url       TEXT NOT NULL,                -- 回调地址
+    request_body       TEXT NOT NULL,                -- 对方 POST 的原始 JSON
+    status             TEXT NOT NULL DEFAULT 'pending', -- pending/processing/success/failed/completed/callback_fail
+    error_message      TEXT DEFAULT '',              -- 错误信息
+    retry_count        INTEGER DEFAULT 0,            -- 回调重试次数
+    files_text         TEXT DEFAULT '',              -- 文件全文+元信息（JSON 数组）
+    files_summary      TEXT DEFAULT '',              -- 文件处理摘要（JSON 数组）
+    llm_request_prompt TEXT DEFAULT '',              -- 模板渲染后的完整 user prompt
+    llm_raw_output     TEXT DEFAULT '',              -- LLM 返回的原始文本（wrap 之前）
+    output_result      TEXT DEFAULT '',              -- 包装后的最终输出
+    callback_body      TEXT DEFAULT '',              -- 发送给 callback_url 的完整请求体
+    timeline           TEXT DEFAULT '',              -- 各环节时间线（JSON 数组）
+    finished_at        DATETIME DEFAULT NULL,         -- 进入终态的时间
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP
 );

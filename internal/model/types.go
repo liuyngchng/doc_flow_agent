@@ -172,7 +172,7 @@ type ParsedDocument struct {
 }
 
 // ============================================================
-// 异步任务
+// 任务追踪
 // ============================================================
 
 const (
@@ -184,39 +184,83 @@ const (
 	TaskStatusCallbackFail = "callback_fail"
 )
 
-// AsyncTask 异步任务记录
-type AsyncTask struct {
-	ID            int64  `json:"id"`
-	TaskID        string `json:"task_id"`
-	LinkID        string `json:"link_id"` // 对方系统的 linkid（可能不唯一）
-	InterfacePath string `json:"interface_path"`
-	RequestBody   string `json:"request_body"`
-	CallbackURL   string `json:"callback_url"`
-	Status        string `json:"status"`
-	OutputResult  string `json:"output_result"`
-	ErrorMessage  string `json:"error_message"`
-	ElapsedMs     int64  `json:"elapsed_ms"`
-	RetryCount    int    `json:"retry_count"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
-}
-
 // ============================================================
 // 调用日志
 // ============================================================
 
-// CallLog API 调用日志
-type CallLog struct {
+// ============================================================
+// 任务追踪 (task_trace)
+// ============================================================
+
+// FileTextItem 单个文件的提取文本 + 元信息
+type FileTextItem struct {
+	FileURL   string   `json:"file_url"`
+	FileName  string   `json:"file_name"`
+	FileType  string   `json:"file_type"` // main_body / attachment / doc_basis
+	Format    string   `json:"format"`    // docx / pdf / xlsx
+	LocalPath string   `json:"local_path"`
+	HasSeal   bool     `json:"has_seal"`
+	SealText  []string `json:"seal_text,omitempty"`
+	TextLen   int      `json:"text_len"`
+	Text      string   `json:"text"`
+}
+
+// FileSummaryItem 文件处理摘要（轻量，不含全文）
+type FileSummaryItem struct {
+	FileURL    string `json:"file_url"`
+	FileName   string `json:"file_name"`
+	FileType   string `json:"file_type"`
+	Format     string `json:"format"`
+	TextLen    int    `json:"text_len"`
+	HasSeal    bool   `json:"has_seal"`
+	Status     string `json:"status"` // ok / download_failed / extract_failed
+	ErrorMsg   string `json:"error_msg,omitempty"`
+	DurationMs int64  `json:"duration_ms,omitempty"`
+}
+
+// TimelineEntry 调用链上每一步的时间戳
+type TimelineEntry struct {
+	Step      string `json:"step"`                // accepted / process_start / download / llm / callback / done
+	At        string `json:"at"`                   // ISO8601 时间
+	DurationMs int64 `json:"duration_ms,omitempty"` // 该步耗时（毫秒）
+	Attempt   int    `json:"attempt,omitempty"`     // 回调时记录第几次重试
+}
+
+// TaskTrace 任务全链路追踪记录
+type TaskTrace struct {
 	ID            int64  `json:"id"`
-	FileID        string `json:"file_id"`
-	InterfaceID   int64  `json:"interface_id"`
+	TaskID        string `json:"task_id"`
+	LinkID        string `json:"linkid"`
 	InterfacePath string `json:"interface_path"`
-	InputParams   string `json:"input_params"`
-	OutputResult  string `json:"output_result"`
-	Status        string `json:"status"`
-	ErrorMessage  string `json:"error_message,omitempty"`
-	ElapsedMs     int64  `json:"elapsed_ms"`
-	CreatedAt     string `json:"created_at"`
+	CallbackURL   string `json:"callback_url"`
+
+	// 输入
+	RequestBody string `json:"request_body"`
+
+	// 状态
+	Status       string `json:"status"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	RetryCount   int    `json:"retry_count"`
+
+	// 文件
+	FilesText    string `json:"files_text"`    // FileTextItem 数组
+	FilesSummary string `json:"files_summary"` // FileSummaryItem 数组
+
+	// LLM 调用链
+	LLMRequestPrompt string `json:"llm_request_prompt"`
+	LLMRawOutput     string `json:"llm_raw_output"`
+	OutputResult     string `json:"output_result"`
+
+	// 回调
+	CallbackBody string `json:"callback_body"`
+
+	// 时间线
+	Timeline string `json:"timeline"` // TimelineEntry 数组
+
+	// 时间戳
+	FinishedAt string `json:"finished_at,omitempty"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 // ============================================================

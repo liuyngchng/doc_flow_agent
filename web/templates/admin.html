@@ -31,7 +31,7 @@
                     <i class="fas fa-folder"></i> 文件管理
                 </div>
                 <div class="cfg-tab" data-tab="logs">
-                    <i class="fas fa-list-alt"></i> 日志查阅
+                    <i class="fas fa-list-alt"></i> 任务日志
                 </div>
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="oa-sim">
@@ -173,19 +173,31 @@
                     </table>
                 </div>
 
-                <!-- 日志查阅 -->
+                <!-- 任务日志 -->
                 <div class="cfg-section" id="section-logs">
-                    <h2><i class="fas fa-list-alt"></i> 日志查阅</h2>
+                    <h2><i class="fas fa-list-alt"></i> 任务日志</h2>
+                    <p style="color:#888;margin-bottom:16px;">最近 10 条任务追踪记录，点击详情查看完整调用链路。</p>
                     <table class="result-table">
-                        <thead><tr><th>File ID</th><th>接口路径</th><th>状态</th><th>耗时(ms)</th><th>时间</th></tr></thead>
-                        <tbody id="logsTbody"><tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
+                        <thead><tr><th>Task ID</th><th>Link ID</th><th>接口路径</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+                        <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
                     </table>
+
+                    <!-- 任务详情弹窗 -->
+                    <div id="taskDetailModal" class="modal-overlay">
+                        <div class="modal-lg">
+                            <h3><i class="fas fa-search"></i> 任务详情</h3>
+                            <div id="taskDetailContent" style="margin-top:20px;"></div>
+                            <div class="modal-actions">
+                                <button type="button" class="cfg-btn cfg-btn-reset" onclick="hideTaskDetail()">关闭</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 操作模拟 -->
                 <div class="cfg-section" id="section-oa-sim">
                     <h2><i class="fas fa-flask"></i> 操作模拟</h2>
-                    <p style="color:#888;margin-bottom:16px;">模拟电子公文系统调用接口。输入完整 JSON（含 <code>file_url</code> 字段），系统自动下载解析文件后异步回调。调用后可在下方终端面板实时查看 task_id 的处理日志。</p>
+                    <p style="color:#888;margin-bottom:16px;">模拟电子公文系统调用接口，提交后可在<a href="#" onclick="document.querySelector('[data-tab=logs]').click();return false;" style="color:#4b6cb7;font-weight:600;">任务日志</a>中查看处理结果。</p>
 
                     <div class="oa-step">
                         <h3>调用接口</h3>
@@ -217,20 +229,6 @@
                     <div class="oa-step">
                         <h3>返回结果</h3>
                         <pre id="oaResult" style="background:#2d2d2d;color:#f8f8f2;padding:16px;border-radius:8px;overflow-x:auto;max-height:400px;font-size:0.85rem;">等待调用...</pre>
-                    </div>
-
-                    <div class="oa-step">
-                        <h3>处理日志 <span style="font-size:0.75rem;color:#888;font-weight:normal;">(实 时 tail -f app.log | grep task_id)</span></h3>
-                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-                            <button class="cfg-btn cfg-btn-save" onclick="startLogStream()" id="btnLogStart">
-                                <i class="fas fa-play"></i> 开始监听
-                            </button>
-                            <button class="cfg-btn" onclick="stopLogStream()" id="btnLogStop" disabled style="background:#c0392b;color:#fff;">
-                                <i class="fas fa-stop"></i> 停止
-                            </button>
-                            <span id="logStatus" style="font-size:0.8rem;color:#888;"></span>
-                        </div>
-                        <pre id="oaLog" style="background:#1a1a2e;color:#00ff88;padding:16px;border-radius:8px;overflow-x:auto;max-height:500px;font-size:0.8rem;font-family:monospace;overflow-y:auto;"></pre>
                     </div>
                 </div>
 

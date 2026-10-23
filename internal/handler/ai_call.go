@@ -117,8 +117,8 @@ func (h *CallHandler) Call(c *gin.Context) {
 	// 7. 自生成全局唯一的 task_id（对方 linkid 可能不唯一，不依赖它做唯一键）
 	taskID := uuid.New().String()
 
-	// 8. 创建异步任务，存入 DB
-	task := &model.AsyncTask{
+	// 8. 创建任务追踪记录，存入 DB
+	task := &model.TaskTrace{
 		TaskID:        taskID,
 		LinkID:        linkid,
 		InterfacePath: interfacePath,
@@ -126,7 +126,7 @@ func (h *CallHandler) Call(c *gin.Context) {
 		CallbackURL:   callbackURL,
 		Status:        model.TaskStatusPending,
 	}
-	if err := h.store.CreateAsyncTask(task); err != nil {
+	if err := h.store.CreateTaskTrace(task); err != nil {
 		slog.Error("call_create_task_failed", "error", err, "task_id", taskID, "linkid", linkid)
 		c.JSON(500, ginResponse{Code: model.ErrCodeInternal, Message: "任务创建失败", TaskID: ""})
 		return
@@ -154,12 +154,27 @@ type fileItem struct {
 	FileName string
 }
 
+// downloadedFile 已下载并解析的单个文件
+type downloadedFile struct {
+	URL        string
+	FileName   string
+	FileType   string
+	LocalPath  string
+	Text       string
+	HasSeal    bool
+	SealTexts  []string
+	Status     string // ok / download_failed / extract_failed
+	ErrorMsg   string // 失败原因
+	DurationMs int64
+}
+
 // downloadedFiles 已下载并解析的文件内容，按类别分组
 type downloadedFiles struct {
-	MainBody    []string // 正文文本（可能多个，一般一个）
-	Attachments []string // 附件文本
-	DocBasis    []string // 办文依据文本
-	SealTexts   []string // 所有文件中检测到的印章文字（去重）
+	MainBody    []string         // 正文文本（可能多个，一般一个）
+	Attachments []string         // 附件文本
+	DocBasis    []string         // 办文依据文本
+	SealTexts   []string         // 所有文件中检测到的印章文字（去重）
+	FlatItems   []downloadedFile // 扁平列表，供 files_text / files_summary 落库
 }
 
 // downloadAllFileURLs 递归提取 body 中所有 file_url，下载、解析并入库
@@ -181,10 +196,17 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}, taskID st
 	for i, item := range items {
 		slog.Info("call_download_file_url", "task_id", taskID, "url", item.URL, "file_type", item.FileType)
 
+		itemStart := time.Now()
+		dl := downloadedFile{URL: item.URL, FileType: item.FileType, FileName: item.FileName}
+
 		// 下载文件
 		resp, err := dlClient.Get(item.URL)
 		if err != nil {
 			slog.Warn("call_download_failed", "task_id", taskID, "url", item.URL, "error", err)
+			dl.Status = "download_failed"
+			dl.ErrorMsg = err.Error()
+			dl.DurationMs = time.Since(itemStart).Milliseconds()
+			result.FlatItems = append(result.FlatItems, dl)
 			continue
 		}
 
@@ -192,6 +214,14 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}, taskID st
 		resp.Body.Close()
 		if err != nil || resp.StatusCode != http.StatusOK {
 			slog.Warn("call_download_failed", "task_id", taskID, "url", item.URL, "status", resp.StatusCode, "error", err)
+			dl.Status = "download_failed"
+			if err != nil {
+				dl.ErrorMsg = err.Error()
+			} else {
+				dl.ErrorMsg = fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(fileBody[:min(len(fileBody), 200)]))
+			}
+			dl.DurationMs = time.Since(itemStart).Milliseconds()
+			result.FlatItems = append(result.FlatItems, dl)
 			continue
 		}
 
@@ -202,16 +232,30 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}, taskID st
 		tmpFile := filepath.Join(tmpDir, fmt.Sprintf("dl_%d_%d%s", time.Now().UnixNano(), i, ext))
 		if err := os.WriteFile(tmpFile, fileBody, 0644); err != nil {
 			slog.Warn("call_tmp_write_failed", "task_id", taskID, "url", item.URL, "error", err)
+			dl.Status = "download_failed"
+			dl.ErrorMsg = err.Error()
+			dl.DurationMs = time.Since(itemStart).Milliseconds()
+			result.FlatItems = append(result.FlatItems, dl)
 			continue
 		}
 		defer os.Remove(tmpFile)
+
+		dl.LocalPath = tmpFile
 
 		// 提取文本及印章信息
 		pd := h.extractFileText(tmpFile)
 		if pd == nil || pd.Text == "" {
 			slog.Warn("call_extract_empty", "task_id", taskID, "url", item.URL)
+			dl.Status = "extract_failed"
+			dl.DurationMs = time.Since(itemStart).Milliseconds()
+			result.FlatItems = append(result.FlatItems, dl)
 			continue
 		}
+		dl.Text = pd.Text
+		dl.HasSeal = pd.HasSeal
+		dl.SealTexts = pd.SealText
+		dl.Status = "ok"
+		dl.DurationMs = time.Since(itemStart).Milliseconds()
 
 		// 入库：file_url 下载的文件无本地持久路径，用 D- 前缀区分
 		fileID := fmt.Sprintf("D-%s%04d", time.Now().Format("20060102150405"), time.Now().Nanosecond()%10000)
@@ -261,6 +305,7 @@ func (h *CallHandler) downloadAllFileURLs(body map[string]interface{}, taskID st
 		}
 
 		slog.Info("call_download_done", "task_id", taskID, "url", item.URL, "file_type", item.FileType, "text_len", len(pd.Text), "has_seal", pd.HasSeal)
+		result.FlatItems = append(result.FlatItems, dl)
 	}
 
 	return result

@@ -14,7 +14,7 @@ type Handler struct {
 	Interface *InterfaceHandler
 	LLMConfig *LLMConfigHandler
 	Call      *CallHandler
-	CallLog   *CallLogHandler
+	CallLog   *TaskTraceHandler
 	User      *UserHandler
 	Proofread *ProofreadHandler
 	AsyncTask *AsyncTaskHandler
@@ -36,7 +36,7 @@ func New(cfg *model.Config, st store.MetaStore) *Handler {
 		Interface: NewInterfaceHandler(st),
 		LLMConfig: NewLLMConfigHandler(st),
 		Call:      call,
-		CallLog:   NewCallLogHandler(st),
+		CallLog:   NewTaskTraceHandler(st),
 		User:      NewUserHandler(st, auth),
 		Proofread: NewProofreadHandler(st),
 		AsyncTask: NewAsyncTaskHandler(st, cfg),

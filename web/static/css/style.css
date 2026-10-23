@@ -598,6 +598,49 @@ footer {
 }
 
 /* ============================================================
+   任务日志详情
+   ============================================================ */
+.kv-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+}
+.kv-key {
+    width: 120px;
+    padding: 6px 10px;
+    font-weight: 600;
+    color: #777;
+    vertical-align: top;
+    white-space: nowrap;
+}
+.kv-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.kv-section {
+    font-size: 0.9rem;
+    color: #4b6cb7;
+    margin: 16px 0 8px 0;
+    padding-top: 12px;
+    border-top: 2px solid #eef1f6;
+}
+.task-detail-json {
+    background: #2d2d2d;
+    color: #f8f8f2;
+    padding: 14px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    max-height: 400px;
+    overflow-y: auto;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* ============================================================
    响应式
    ============================================================ */
 @media (max-width: 768px) {

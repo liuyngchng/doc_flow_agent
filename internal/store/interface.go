@@ -45,16 +45,13 @@ type MetaStore interface {
 	UpdateFileParseResult(fileID string, pd *model.ParsedDocument) error
 	DeleteFileRecord(fileID string) error
 
-	// --- 调用日志 ---
-	CreateCallLog(log *model.CallLog) error
-	ListCallLogs(fileID string, limit, offset int) ([]model.CallLog, int, error)
-
-	// --- 异步任务 ---
-	CreateAsyncTask(task *model.AsyncTask) error
-	UpdateAsyncTask(task *model.AsyncTask) error
-	GetAsyncTask(taskID string) (*model.AsyncTask, error)
-	DeleteAsyncTask(taskID string) error
-	ListRunningTasks() ([]model.AsyncTask, error) // pending + processing
+	// --- 任务追踪 ---
+	CreateTaskTrace(task *model.TaskTrace) error
+	UpdateTaskTrace(task *model.TaskTrace) error
+	GetTaskTrace(taskID string) (*model.TaskTrace, error)
+	DeleteTaskTrace(taskID string) error
+	ListRunningTasks() ([]model.TaskTrace, error) // pending + processing
+	ListTaskTraces(limit, offset int) ([]model.TaskTrace, int, error)
 	CountRunningTasks() (int, error)              // pending + processing 计数
 	PruneOldRecords(retentionDays int) ([]string, error) // 清理过期数据，返回被删文件的磁盘路径列表
 }
