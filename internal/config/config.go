@@ -50,6 +50,7 @@ func defaultConfig() *model.Config {
 			MaxPendingTasks:       10,
 			CallbackRetries:       3,
 			CallbackRetryInterval: 2,
+			RetentionDays:         30,
 		},
 		DocParser: model.DocParserConfig{
 			URL: "",
@@ -78,6 +79,9 @@ func applyDefaults(cfg *model.Config) {
 	}
 	if cfg.Sys.CallbackRetryInterval <= 0 {
 		cfg.Sys.CallbackRetryInterval = 2
+	}
+	if cfg.Sys.RetentionDays <= 0 {
+		cfg.Sys.RetentionDays = 30
 	}
 }
 

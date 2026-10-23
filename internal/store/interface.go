@@ -56,4 +56,5 @@ type MetaStore interface {
 	DeleteAsyncTask(taskID string) error
 	ListRunningTasks() ([]model.AsyncTask, error) // pending + processing
 	CountRunningTasks() (int, error)              // pending + processing 计数
+	PruneOldRecords(retentionDays int) ([]string, error) // 清理过期数据，返回被删文件的磁盘路径列表
 }

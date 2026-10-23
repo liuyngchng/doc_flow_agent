@@ -415,7 +415,7 @@ async function oaCall() {
 
     if (!ifacePath) { toast('请选择接口', 'error'); return; }
 
-    document.getElementById('oaResult').textContent = '调用中...';
+    document.getElementById('oaResult').textContent = '提交中...';
     try {
         var start = Date.now();
         var resp = await fetch('/api/v1/' + ifacePath, {
@@ -426,10 +426,78 @@ async function oaCall() {
         var elapsed = Date.now() - start;
         var json = await resp.json();
         var result = JSON.stringify(json, null, 2);
-        document.getElementById('oaResult').textContent = result + '\n\n--- 耗时: ' + elapsed + 'ms ---';
+        document.getElementById('oaResult').textContent = result + '\n\n--- 受理耗时: ' + elapsed + 'ms ---';
+
+        // 异步接口：拿到 task_id 后自动开始监听日志
+        if (json.task_id) {
+            lastTaskId = json.task_id;
+            startLogStream();
+        } else {
+            document.getElementById('oaLog').textContent = '受理失败，无 task_id，无法监听日志。';
+        }
     } catch (err) {
         document.getElementById('oaResult').textContent = '调用失败: ' + err.message;
     }
+}
+
+// ============================================================
+// 日志流（tail -f app.log | grep task_id）
+// ============================================================
+var logEventSource = null;
+var lastTaskId = '';
+
+function startLogStream() {
+    var taskId = lastTaskId || '';
+    if (!taskId) {
+        toast('请先调用接口获取 task_id', 'error');
+        return;
+    }
+
+    stopLogStream();
+
+    var logEl = document.getElementById('oaLog');
+    logEl.textContent = '>>> 监听 task_id=' + taskId + ' 的日志...\n';
+
+    logEventSource = new EventSource('/api/inner/logs/stream?task_id=' + encodeURIComponent(taskId));
+
+    logEventSource.addEventListener('ready', function(e) {
+        logEl.textContent += e.data + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+    });
+
+    logEventSource.addEventListener('log', function(e) {
+        logEl.textContent += e.data + '\n';
+        // 限制最大行数，避免无限增长
+        var lines = logEl.textContent.split('\n');
+        if (lines.length > 500) {
+            logEl.textContent = lines.slice(lines.length - 500).join('\n');
+        }
+        logEl.scrollTop = logEl.scrollHeight;
+    });
+
+    logEventSource.addEventListener('error', function(e) {
+        if (e.data) logEl.textContent += e.data + '\n';
+        document.getElementById('logStatus').textContent = '连接中断';
+    });
+
+    logEventSource.onerror = function() {
+        document.getElementById('logStatus').textContent = '连接已断开';
+        stopLogStream();
+    };
+
+    document.getElementById('btnLogStart').disabled = true;
+    document.getElementById('btnLogStop').disabled = false;
+    document.getElementById('logStatus').textContent = '监听中...';
+}
+
+function stopLogStream() {
+    if (logEventSource) {
+        logEventSource.close();
+        logEventSource = null;
+    }
+    document.getElementById('btnLogStart').disabled = false;
+    document.getElementById('btnLogStop').disabled = true;
+    document.getElementById('logStatus').textContent = '';
 }
 
 // ============================================================

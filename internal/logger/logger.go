@@ -162,7 +162,7 @@ func Init(debug bool) error {
 
 	fileWriter, err := rotatelogs.New(
 		"data/logs/app.%Y%m%d%H.log",
-		rotatelogs.WithMaxAge(7*24*time.Hour),
+		rotatelogs.WithMaxAge(180*24*time.Hour), // 保留 6 个月
 		rotatelogs.WithRotationTime(time.Hour),
 	)
 	if err != nil {

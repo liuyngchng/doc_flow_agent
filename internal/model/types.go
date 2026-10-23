@@ -84,6 +84,7 @@ type SysConfig struct {
 	MaxPendingTasks       int    `yaml:"max_pending_tasks"`           // 任务总数上限，默认 10
 	CallbackRetries       int    `yaml:"callback_retries"`            // 回调重试次数，默认 3
 	CallbackRetryInterval int    `yaml:"callback_retry_interval_sec"` // 重试基础间隔（秒），默认 2
+	RetentionDays         int    `yaml:"retention_days"`              // 数据保留天数，默认 30
 }
 
 // DocParserConfig 文档解析服务配置

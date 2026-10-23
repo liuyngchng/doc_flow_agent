@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 
 	"doc_flow_agent/internal/config"
 	"doc_flow_agent/internal/handler"
@@ -51,6 +53,40 @@ func main() {
 	// 启动异步 Worker Pool
 	h.Worker.Start()
 	defer h.Worker.Stop()
+
+	// 启动定期数据清理（每天清理一次过期数据，保留 retention_days 天）
+	go func() {
+		retention := cfg.Sys.RetentionDays
+		if retention <= 0 {
+			retention = 30
+		}
+		doPrune := func() {
+			paths, err := metaStore.PruneOldRecords(retention)
+			if err != nil {
+				slog.Error("main_prune_failed", "error", err)
+				return
+			}
+			// 删除磁盘上的过期文件，文件已不存在时只打 warning 不报错
+			for _, p := range paths {
+				dir := filepath.Dir(p)
+				if err := os.RemoveAll(dir); err != nil {
+					if os.IsNotExist(err) {
+						slog.Warn("main_prune_file_already_gone", "path", dir)
+					} else {
+						slog.Warn("main_prune_file_remove_failed", "path", dir, "error", err)
+					}
+				}
+			}
+		}
+		// 启动时先清理一次
+		doPrune()
+		// 之后每 24h 清理一次
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			doPrune()
+		}
+	}()
 
 	// 设置 Gin
 	if !cfg.Server.Debug {
@@ -143,6 +179,9 @@ func main() {
 		v1.POST("/proofread/submit", h.Proofread.Submit)
 		v1.GET("/proofread/query/:task_id", h.Proofread.Query)
 		v1.GET("/proofread/state", h.Proofread.State)
+
+		// 日志流（操作模拟：实时查看 task_id 相关日志）
+		v1.GET("/logs/stream", handler.LogStream)
 	}
 
 	// 用户自助 API

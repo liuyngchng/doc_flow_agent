@@ -15,6 +15,7 @@ sys:
   max_pending_tasks: 10              # 任务总数上限（处理中 + 排队），超过后拒单
   callback_retries: 3                # 回调失败最大重试次数
   callback_retry_interval_sec: 2     # 回调重试基础间隔（秒），指数退避
+  retention_days: 30                  # 运行时数据保留天数（async_tasks/call_logs/files），默认 30
 
 doc_parser:
   url: ""                   # 文档解析服务接口地址（解析文档并返回纯文本），留空则使用内置解析

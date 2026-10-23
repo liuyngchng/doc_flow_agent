@@ -178,6 +178,47 @@ pending → processing → success/failed → completed/callback_fail
 
 ---
 
+## 数据生命周期
+
+本系统不设计为永久存储。运行时产生的数据会定期自动清理。
+
+### 自动清理（PruneOldRecords）
+
+每天执行一次（启动时 + 此后每 24 小时），删除超过 `retention_days` 天的数据。
+
+| 表 | 清理范围 | 默认保留 |
+|----|---------|---------|
+| `async_tasks` | 终态记录（`completed` / `callback_fail` / `success` / `failed`），`pending` 和 `processing` 不删 | 30 天 |
+| `call_logs` | 全部记录 | 30 天 |
+| `files` | 全部记录（含用户上传和临时下载），磁盘文件同步删除；文件已不存在时仅 `WARN` 不报错 | 30 天 |
+
+**不动**的系统表：`users`、`sys_config`、`llm_configs`、`agent_interfaces`、`api_tokens`。
+
+清理操作会写入日志：`prune_records deleted_async_tasks=N deleted_call_logs=N deleted_files=N disk_paths_to_remove=N`
+
+### 日志文件
+
+| 项目 | 说明 |
+|------|------|
+| 路径 | `data/logs/app.YYYYMMDDHH.log` |
+| 轮转 | 每小时 |
+| 保留 | **6 个月**（`rotatelogs.WithMaxAge` 自动清理过期文件） |
+
+### 配置项总览
+
+```yaml
+# cfg.yml — 异步相关配置（均有默认值）
+sys:
+  callback_url_token: ""             # 回调 Bearer 认证 token（对方提供）
+  max_concurrent_tasks: 5            # Worker 数量 = 同时调用 LLM 的任务数
+  max_pending_tasks: 10              # 任务总数上限（处理中 + 排队），超过后拒单（code=2002）
+  callback_retries: 3                # 回调失败最大重试次数
+  callback_retry_interval_sec: 2     # 回调重试基础间隔（秒），指数退避：2s → 4s → 8s
+  retention_days: 30                 # 运行时数据保留天数
+```
+
+---
+
 ## 文件引用约定
 
 电子公文系统在请求 JSON 中通过 `files` 数组引用待解析的文件，系统自动递归扫描下载：

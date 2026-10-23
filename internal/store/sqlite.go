@@ -657,6 +657,65 @@ func (s *SQLiteStore) CountRunningTasks() (int, error) {
 	return count, err
 }
 
+// PruneOldRecords 清理超过 retentionDays 天的运行时数据，返回被删文件的磁盘路径列表
+// 清理范围：async_tasks（终态）、call_logs、files（含用户上传和临时下载）
+// 不动：users、sys_config、llm_configs、agent_interfaces、api_tokens
+func (s *SQLiteStore) PruneOldRecords(retentionDays int) ([]string, error) {
+	cutoff := fmt.Sprintf("-%d days", retentionDays)
+	if retentionDays <= 0 {
+		retentionDays = 30
+		cutoff = "-30 days"
+	}
+
+	// 1. 先查出待删文件的磁盘路径（DB 删除前）
+	var filePaths []string
+	rows, err := s.db.Query("SELECT file_path FROM files WHERE file_path != '' AND created_at < datetime('now', ?)", cutoff)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var p string
+			rows.Scan(&p)
+			if p != "" {
+				filePaths = append(filePaths, p)
+			}
+		}
+	}
+
+	// 2. async_tasks：只删终态
+	res, err := s.db.Exec(
+		"DELETE FROM async_tasks WHERE status IN ('success','failed','completed','callback_fail') AND updated_at < datetime('now', ?)",
+		cutoff,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("清理 async_tasks 失败: %w", err)
+	}
+	nTasks, _ := res.RowsAffected()
+
+	// 3. call_logs
+	res, err = s.db.Exec("DELETE FROM call_logs WHERE created_at < datetime('now', ?)", cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("清理 call_logs 失败: %w", err)
+	}
+	nLogs, _ := res.RowsAffected()
+
+	// 4. files
+	res, err = s.db.Exec("DELETE FROM files WHERE created_at < datetime('now', ?)", cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("清理 files 失败: %w", err)
+	}
+	nFiles, _ := res.RowsAffected()
+
+	slog.Info("prune_records",
+		"retention_days", retentionDays,
+		"deleted_async_tasks", nTasks,
+		"deleted_call_logs", nLogs,
+		"deleted_files", nFiles,
+		"disk_paths_to_remove", len(filePaths),
+	)
+
+	return filePaths, nil
+}
+
 // ============================================================
 // 辅助函数
 // ============================================================
