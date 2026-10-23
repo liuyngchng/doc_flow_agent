@@ -144,45 +144,50 @@ func main() {
 	v1 := r.Group("/api/inner")
 	v1.Use(h.Auth.CookieAPIAuthMiddleware())
 	{
-		// 配置
-		v1.GET("/config", h.Config.GetConfig)
-		v1.PUT("/config", h.Config.UpdateConfig)
-
-		// LLM 模型配置
-		v1.GET("/llm-configs", h.LLMConfig.List)
-		v1.POST("/llm-configs", h.LLMConfig.Create)
-		v1.PUT("/llm-configs/:id", h.LLMConfig.Update)
-		v1.DELETE("/llm-configs/:id", h.LLMConfig.Delete)
-		v1.PUT("/llm-configs/:id/default", h.LLMConfig.SetDefault)
-
-		// 接口管理
-		v1.GET("/interfaces", h.Interface.List)
-		v1.GET("/interfaces/:id", h.Interface.Get)
-		v1.POST("/interfaces", h.Interface.Create)
-		v1.PUT("/interfaces/:id", h.Interface.Update)
-		v1.DELETE("/interfaces/:id", h.Interface.Delete)
-		v1.POST("/interfaces/:id/test", h.Interface.Test)
-
-		// 文件管理
-		v1.GET("/files", h.File.List)
-		v1.DELETE("/files/:file_id", h.File.Delete)
-
-		// 任务追踪
+		// 任务追踪 — 所有登录用户（含只读用户）可查看
 		v1.GET("/task-trace", h.CallLog.List)
 		v1.GET("/task-trace/:task_id", h.CallLog.Get)
 
-		// 用户管理
-		v1.GET("/users", h.User.ListUsers)
-		v1.POST("/users", h.User.CreateUser)
-		v1.DELETE("/users/:name", h.User.DeleteUser)
+		// 以下为管理员专属
+		admin := v1.Group("")
+		admin.Use(h.Auth.AdminOnlyMiddleware())
+		{
+			// 配置
+			admin.GET("/config", h.Config.GetConfig)
+			admin.PUT("/config", h.Config.UpdateConfig)
 
-		// 审稿模拟
-		v1.POST("/proofread/submit", h.Proofread.Submit)
-		v1.GET("/proofread/query/:task_id", h.Proofread.Query)
-		v1.GET("/proofread/state", h.Proofread.State)
+			// LLM 模型配置
+			admin.GET("/llm-configs", h.LLMConfig.List)
+			admin.POST("/llm-configs", h.LLMConfig.Create)
+			admin.PUT("/llm-configs/:id", h.LLMConfig.Update)
+			admin.DELETE("/llm-configs/:id", h.LLMConfig.Delete)
+			admin.PUT("/llm-configs/:id/default", h.LLMConfig.SetDefault)
+
+			// 接口管理
+			admin.GET("/interfaces", h.Interface.List)
+			admin.GET("/interfaces/:id", h.Interface.Get)
+			admin.POST("/interfaces", h.Interface.Create)
+			admin.PUT("/interfaces/:id", h.Interface.Update)
+			admin.DELETE("/interfaces/:id", h.Interface.Delete)
+			admin.POST("/interfaces/:id/test", h.Interface.Test)
+
+			// 文件管理
+			admin.GET("/files", h.File.List)
+			admin.DELETE("/files/:file_id", h.File.Delete)
+
+			// 用户管理
+			admin.GET("/users", h.User.ListUsers)
+			admin.POST("/users", h.User.CreateUser)
+			admin.DELETE("/users/:name", h.User.DeleteUser)
+
+			// 审稿模拟
+			admin.POST("/proofread/submit", h.Proofread.Submit)
+			admin.GET("/proofread/query/:task_id", h.Proofread.Query)
+			admin.GET("/proofread/state", h.Proofread.State)
+		}
 	}
 
-	// 用户自助 API
+	// 用户自助 API（改密码 — 所有登录用户）
 	v1User := v1.Group("/user")
 	{
 		v1User.PUT("/password", h.User.ChangePassword)

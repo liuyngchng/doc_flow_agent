@@ -720,5 +720,9 @@ async function proofreadQuery(auto) {
 function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-// Load LLM configs on page init
-loadLLMConfigs();
+// Page init — admin 加载首 tab，只读用户加载任务日志
+if (document.getElementById('llmTbody')) {
+    loadLLMConfigs();
+} else {
+    loadLogs();
+}

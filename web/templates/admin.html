@@ -20,6 +20,7 @@
 
         <div class="cfg-layout">
             <nav class="cfg-sidebar">
+                {{if eq .role 1}}
                 <div class="cfg-tab active" data-tab="llm">
                     <i class="fas fa-robot"></i> 模型配置
                 </div>
@@ -30,9 +31,11 @@
                 <div class="cfg-tab" data-tab="files">
                     <i class="fas fa-folder"></i> 文件管理
                 </div>
-                <div class="cfg-tab" data-tab="logs">
+                {{end}}
+                <div class="cfg-tab{{if ne .role 1}} active{{end}}" data-tab="logs">
                     <i class="fas fa-list-alt"></i> 任务日志
                 </div>
+                {{if eq .role 1}}
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="oa-sim">
                     <i class="fas fa-flask"></i> 操作模拟
@@ -47,9 +50,11 @@
                 <div class="cfg-tab" data-tab="users">
                     <i class="fas fa-users"></i> 用户管理
                 </div>
+                {{end}}
             </nav>
 
             <div class="cfg-content">
+                {{if eq .role 1}}
                 <!-- 模型配置 -->
                 <div class="cfg-section active" id="section-llm">
                     <h2><i class="fas fa-robot"></i> 模型配置</h2>
@@ -172,6 +177,7 @@
                         <tbody id="filesTbody"><tr><td colspan="7" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
                     </table>
                 </div>
+                {{end}}
 
                 <!-- 任务日志 -->
                 <div class="cfg-section" id="section-logs">
@@ -195,6 +201,7 @@
                 </div>
 
                 <!-- 操作模拟 -->
+                {{if eq .role 1}}
                 <div class="cfg-section" id="section-oa-sim">
                     <h2><i class="fas fa-flask"></i> 操作模拟</h2>
                     <p style="color:#888;margin-bottom:16px;">模拟电子公文系统调用接口，提交后可在<a href="#" onclick="document.querySelector('[data-tab=logs]').click();return false;" style="color:#4b6cb7;font-weight:600;">任务日志</a>中查看处理结果。</p>
@@ -347,6 +354,7 @@
                         <tbody id="usersTbody"><tr><td colspan="4" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
                     </table>
                 </div>
+                {{end}}
             </div>
         </div>
 
