@@ -100,7 +100,8 @@ func (h *ProofreadHandler) Submit(c *gin.Context) {
 	}
 	writer.Close()
 
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/proofread", &body)
+	reqURL := baseURL // cfg 中的 doc_audit.api_url 即为完整地址（含路径），直接使用
+	req, err := http.NewRequest(http.MethodPost, reqURL, &body)
 	if err != nil {
 		c.JSON(500, gin.H{"status": "error", "error": "创建代理请求失败"})
 		return
@@ -109,6 +110,8 @@ func (h *ProofreadHandler) Submit(c *gin.Context) {
 	if apiKey != "" {
 		req.Header.Set("x-api-key", apiKey)
 	}
+
+	slog.Info("proofread_forward", "url", reqURL, "user", userName(c), "filename", file.Filename, "ext", ext, "callback_url", callbackURL)
 
 	resp, err := docParserClient.Do(req)
 	if err != nil {
@@ -126,23 +129,37 @@ func (h *ProofreadHandler) Submit(c *gin.Context) {
 
 	slog.Info("proofread_submit", "user", userName(c), "filename", file.Filename, "ext", ext, "status", resp.StatusCode, "callback_url", callbackURL)
 
-	// 从 rdCLI 响应中提取 task_id 并持久化
-	if resp.StatusCode == 200 {
-		var parsed struct {
-			Success bool `json:"success"`
-			Data    struct {
-				TaskID string `json:"task_id"`
-			} `json:"data"`
+	// 外部服务返回非 200 时，不要把非 JSON 响应体转发给前端（避免前端 JSON.parse 报错）
+	if resp.StatusCode != 200 {
+		errDetail := strings.TrimSpace(string(respBody))
+		if errDetail == "" {
+			errDetail = fmt.Sprintf("外部服务返回状态码 %d", resp.StatusCode)
+		} else if !json.Valid([]byte(errDetail)) {
+			// 截断非 JSON 响应（如 HTML），只取前 200 字符便于排查
+			if len(errDetail) > 200 {
+				errDetail = errDetail[:200] + "..."
+			}
 		}
-		if json.Unmarshal(respBody, &parsed) == nil && parsed.Success && parsed.Data.TaskID != "" {
-			h.store.SetConfig("proofread_current_task_id", parsed.Data.TaskID, "审稿任务 ID")
-			h.store.SetConfig("proofread_current_status", "pending", "审稿任务状态")
-			h.store.SetConfig("proofread_current_file_name", file.Filename, "审稿文件名")
-			h.store.SetConfig("proofread_current_result", "", "审稿结果（等待回调）")
-		}
+		slog.Warn("proofread_upstream_error", "url", reqURL, "status", resp.StatusCode, "body", errDetail)
+		c.JSON(502, gin.H{"status": "error", "error": fmt.Sprintf("审稿服务异常 (status=%d): %s", resp.StatusCode, errDetail)})
+		return
 	}
 
-	c.Data(resp.StatusCode, "application/json", respBody)
+	// 从 rdCLI 响应中提取 task_id 并持久化
+	var parsed struct {
+		Success bool `json:"success"`
+		Data    struct {
+			TaskID string `json:"task_id"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(respBody, &parsed) == nil && parsed.Success && parsed.Data.TaskID != "" {
+		h.store.SetConfig("proofread_current_task_id", parsed.Data.TaskID, "审稿任务 ID")
+		h.store.SetConfig("proofread_current_status", "pending", "审稿任务状态")
+		h.store.SetConfig("proofread_current_file_name", file.Filename, "审稿文件名")
+		h.store.SetConfig("proofread_current_result", "", "审稿结果（等待回调）")
+	}
+
+	c.Data(200, "application/json", respBody)
 }
 
 // Callback 接收 rdCLI 核稿完成后的回调推送
