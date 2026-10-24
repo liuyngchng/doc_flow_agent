@@ -28,6 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/01proxy
 
+ENV TZ=Asia/Shanghai
+
 WORKDIR /app
 
 # 预编译二进制
