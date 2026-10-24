@@ -61,9 +61,10 @@ type User struct {
 
 // Config 运行配置
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Sys       SysConfig       `yaml:"sys"`
-	DocParser DocParserConfig `yaml:"doc_parser"`
+	Server    ServerConfig      `yaml:"server"`
+	Sys       SysConfig         `yaml:"sys"`
+	DocParser DocParserConfig   `yaml:"doc_parser"`
+	DocAudit  DocAuditConfig    `yaml:"doc_audit"`
 	Dict      map[string]string `yaml:"dict"` // 数据字典：请求 JSON key → 中文含义
 }
 
@@ -91,6 +92,12 @@ type SysConfig struct {
 type DocParserConfig struct {
 	URL   string `yaml:"url"`   // 文档解析接口地址，如 http://parser:9090/parse
 	Token string `yaml:"token"` // 调用解析接口时携带的认证 token（可选）
+}
+
+// DocAuditConfig 文档审核服务配置
+type DocAuditConfig struct {
+	APIURL string `yaml:"api_url"` // 文档审核服务接口地址（rdCLI 审稿服务）
+	Token  string `yaml:"token"`   // 调用审核服务时的认证 token（x-api-key）
 }
 
 // ============================================================

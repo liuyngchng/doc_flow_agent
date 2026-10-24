@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"doc_flow_agent/internal/model"
 	"doc_flow_agent/internal/store"
 
 	"github.com/gin-gonic/gin"
@@ -28,12 +29,13 @@ var proofreadAllowedExts = map[string]bool{
 
 // ProofreadHandler 审稿模拟处理器（代理外部 rdCLI 审稿服务）
 type ProofreadHandler struct {
+	cfg   *model.Config
 	store store.MetaStore
 }
 
 // NewProofreadHandler 创建审稿模拟处理器
-func NewProofreadHandler(st store.MetaStore) *ProofreadHandler {
-	return &ProofreadHandler{store: st}
+func NewProofreadHandler(cfg *model.Config, st store.MetaStore) *ProofreadHandler {
+	return &ProofreadHandler{cfg: cfg, store: st}
 }
 
 // submitInternal 提交审稿任务到外部 rdCLI（内部复用）
@@ -187,14 +189,13 @@ func (h *ProofreadHandler) State(c *gin.Context) {
 	})
 }
 
-// getProofreadConfig 从 DB 读取审稿服务配置
+// getProofreadConfig 从 yaml 配置读取审稿服务配置
 func (h *ProofreadHandler) getProofreadConfig() (string, string, error) {
-	baseURL, _ := h.store.GetConfig("proofread_base_url")
+	baseURL := strings.TrimRight(h.cfg.DocAudit.APIURL, "/")
 	if baseURL == "" {
-		return "", "", fmt.Errorf("未配置审稿服务地址，请先在系统设置中配置")
+		return "", "", fmt.Errorf("未配置文档审核服务地址，请先在 cfg.yml 中配置 doc_audit.api_url")
 	}
-	apiKey, _ := h.store.GetConfig("proofread_api_key")
-	return strings.TrimRight(baseURL, "/"), apiKey, nil
+	return baseURL, h.cfg.DocAudit.Token, nil
 }
 
 // persistFromSubmit 从 rdCLI 提交响应中提取 task_id 并持久化

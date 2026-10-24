@@ -243,25 +243,8 @@
                 <div class="cfg-section" id="section-proofread-sim">
                     <h2><i class="fas fa-file-signature"></i> 审稿模拟</h2>
                     <p style="color:#888;margin-bottom:16px;">
-                        对接 rdCLI 文档核稿接口（异步）。配置服务地址，上传文档，获取核稿意见。
+                        对接 rdCLI 文档核稿接口（异步）。服务地址通过 cfg.yml 中 doc_audit 配置。
                     </p>
-
-                    <div class="oa-step">
-                        <h3>服务配置</h3>
-                        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-                            <div class="form-g" style="flex:2;min-width:260px;margin-bottom:0;">
-                                <label>基础地址</label>
-                                <input type="text" id="prBaseURL" placeholder="https://rdcli.example.com" style="width:100%;">
-                            </div>
-                            <div class="form-g" style="flex:1;min-width:200px;margin-bottom:0;">
-                                <label>API Key <span style="color:#999;font-weight:400;">(可选)</span></label>
-                                <input type="text" id="prAPIKey" placeholder="ck_xxxx..." style="width:100%;font-family:monospace;">
-                            </div>
-                            <button class="cfg-btn cfg-btn-save" onclick="saveProofreadConfig()">
-                                <i class="fas fa-check"></i> 保存
-                            </button>
-                        </div>
-                    </div>
 
                     <div class="oa-step">
                         <h3>提交任务</h3>

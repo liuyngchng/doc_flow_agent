@@ -38,7 +38,7 @@ func New(cfg *model.Config, st store.MetaStore) *Handler {
 		Call:      call,
 		CallLog:   NewTaskTraceHandler(st),
 		User:      NewUserHandler(st, auth),
-		Proofread: NewProofreadHandler(st),
+		Proofread: NewProofreadHandler(cfg, st),
 		AsyncTask: NewAsyncTaskHandler(st, cfg),
 		Worker:    worker,
 	}

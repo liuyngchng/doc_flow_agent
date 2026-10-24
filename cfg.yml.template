@@ -21,6 +21,10 @@ doc_parser:
   url: ""                   # 文档解析服务接口地址（解析文档并返回纯文本），留空则使用内置解析
   token: ""                 # 调用解析服务时的认证 token（可选）
 
+doc_audit:
+  api_url: ""               # 文档审核服务接口地址（rdCLI 审稿服务）
+  token: ""                 # 调用审核服务时的认证 token（x-api-key）
+
 # 数据字典：把请求 JSON 中的字段名翻译成中文，便于 LLM 理解
 # key 为请求 JSON 的字段名，value 为对应的中文含义
 # 下面仅为格式示范，请按实际对接字段在 cfg.yml 中配置真实字典

@@ -203,6 +203,17 @@ func main() {
 	// 电子公文工作流调用接口（支持 X-Api-Key 或 Bearer token）
 	r.POST("/api/v1/*interfacePath", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
 
+	// 开发调试：接收 POST JSON 请求，仅打印不做任何处理
+	r.POST("/api/v1/dev/null", func(c *gin.Context) {
+		var body map[string]interface{}
+		if err := c.ShouldBindJSON(&body); err == nil {
+			slog.Info("dev_null_received", "body", body)
+		} else {
+			slog.Info("dev_null_received_raw", "error", err.Error())
+		}
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
 	// 异步任务管理（查询进行中任务 / 取消排队中任务 / 查看任务追踪）
 	r.GET("/api/v1/tasks", h.Auth.APITokenMiddleware(), h.AsyncTask.ListTasks)
 	r.DELETE("/api/v1/tasks/:task_id", h.Auth.APITokenMiddleware(), h.AsyncTask.DeleteTask)

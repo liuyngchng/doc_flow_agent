@@ -576,12 +576,7 @@ var prCurrentTaskId = '';
 var prCurrentStatus = '';
 
 async function loadProofreadConfig() {
-    try {
-        var resp = await fetch('/api/inner/config'); var json = await resp.json();
-        var pr = json.data.proofread || {};
-        document.getElementById('prBaseURL').value = pr.base_url || '';
-        document.getElementById('prAPIKey').value = pr.api_key || '';
-    } catch (_) {}
+    // doc_audit 配置已移至 cfg.yml，无需从 API 加载界面配置
     // 恢复上次的审稿任务状态
     restoreProofreadState();
 }
@@ -605,25 +600,7 @@ async function restoreProofreadState() {
     } catch (_) {}
 }
 
-async function saveProofreadConfig() {
-    try {
-        var resp = await fetch('/api/inner/config', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                proofread: {
-                    base_url: document.getElementById('prBaseURL').value.trim(),
-                    api_key: document.getElementById('prAPIKey').value.trim()
-                }
-            })
-        });
-        var json = await resp.json();
-        if (json.status === 'ok') { toast('审稿配置已保存', 'success'); }
-        else { toast(json.error || '保存失败', 'error'); }
-    } catch (err) { toast('保存失败: ' + err.message, 'error'); }
-}
-
-function prFileExt(fileName) {
+async function restoreProofreadState() {
     var i = fileName.lastIndexOf('.');
     if (i < 0) return '';
     return fileName.slice(i).toLowerCase();
