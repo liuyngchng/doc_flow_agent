@@ -601,8 +601,10 @@ async function proofreadSubmit() {
         var result = JSON.stringify(json, null, 2);
         document.getElementById('prResult').textContent = result + '\n\n--- 耗时: ' + elapsed + 'ms ---';
 
-        if (json.success && json.data && json.data.task_id) {
-            prSetTaskId(json.data.task_id);
+        // rdCLI 响应格式: {"code":0, "task_id":"xxx", "data":{"status":"pending"}}
+        // task_id 在顶层
+        if (json.code === 0 && json.task_id) {
+            prSetTaskId(json.task_id);
             prCurrentStatus = 'pending';
             fileInput.value = '';
             // 不轮询，等对方回调完成即可
@@ -627,7 +629,8 @@ async function proofreadQuery() {
         var result = JSON.stringify(json, null, 2);
         document.getElementById('prResult').textContent = result + '\n\n--- 耗时: ' + elapsed + 'ms ---';
 
-        if (json.success && json.data) {
+        // 格式与 rdCLI 原始响应一致: {"code":0, "task_id":"xxx", "data":{"status":"...","file_name":"..."}}
+        if (json.code === 0 && json.data) {
             prCurrentStatus = json.data.status || '';
         }
     } catch (err) {

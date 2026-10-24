@@ -157,7 +157,7 @@ func (h *ProofreadHandler) Submit(c *gin.Context) {
 
 	taskID := rdcliResp.TaskID
 
-	// 记录 rdCLI 生成的 task_id，后续回调时用来匹配
+	// 记录 rdCLI 生成的 task_id，后续回调时用于匹配
 	h.store.SetConfig("proofread_current_task_id", taskID, "审稿任务 ID")
 	h.store.SetConfig("proofread_current_status", "pending", "审稿任务状态")
 	h.store.SetConfig("proofread_current_file_name", file.Filename, "审稿文件名")
@@ -165,11 +165,8 @@ func (h *ProofreadHandler) Submit(c *gin.Context) {
 
 	slog.Info("proofread_task_created", "user", userName(c), "task_id", taskID, "filename", file.Filename)
 
-	// 返回 rdCLI 的 task_id 给前端
-	c.JSON(200, gin.H{
-		"success": true,
-		"data":    gin.H{"task_id": taskID},
-	})
+	// 原样透传 rdCLI 的响应给前端（rdCLI 返回什么格式，前端就看到什么格式）
+	c.Data(200, "application/json", respBody)
 }
 
 // Callback 接收 rdCLI 核稿完成后的回调推送
@@ -238,6 +235,10 @@ func (h *ProofreadHandler) Callback(c *gin.Context) {
 
 // Query 查询审稿结果 — 从本地 DB 读取
 // GET /api/inner/proofread/query/:task_id
+//
+// 返回格式与 rdCLI 原始响应一致（跟 Submit 透传统一）：
+//
+//	{"code":0, "task_id":"xxx", "data":{"status":"pending/processing/completed/failed", "file_name":"...", ...}}
 func (h *ProofreadHandler) Query(c *gin.Context) {
 	taskID := c.Param("task_id")
 	if taskID == "" {
@@ -268,7 +269,7 @@ func (h *ProofreadHandler) Query(c *gin.Context) {
 	result, _ := h.store.GetConfig("proofread_current_result")
 
 	if result == "" {
-		// 还没有收到回调，返回进行中状态
+		// 还没有收到回调 — 返回 pending 状态（按 rdCLI 格式）
 		status, _ := h.store.GetConfig("proofread_current_status")
 		fileName, _ := h.store.GetConfig("proofread_current_file_name")
 
@@ -280,9 +281,9 @@ func (h *ProofreadHandler) Query(c *gin.Context) {
 		)
 
 		c.JSON(200, gin.H{
-			"success": true,
+			"code":    0,
+			"task_id": taskID,
 			"data": gin.H{
-				"task_id":   taskID,
 				"status":    status,
 				"file_name": fileName,
 			},
@@ -290,24 +291,9 @@ func (h *ProofreadHandler) Query(c *gin.Context) {
 		return
 	}
 
-	// 已经有回调结果，直接返回
-	var resultJSON interface{}
-	if err := json.Unmarshal([]byte(result), &resultJSON); err != nil {
-		slog.Error("proofread_query_result_corrupted",
-			"user", userName(c),
-			"task_id", taskID,
-			"error", err,
-		)
-		c.JSON(500, gin.H{"status": "error", "error": "结果数据损坏"})
-		return
-	}
-
-	slog.Info("proofread_query_result",
-		"user", userName(c),
-		"task_id", taskID,
-	)
-
-	c.JSON(200, gin.H{"success": true, "data": resultJSON})
+	// 已经有回调结果 — 直接返回 rdCLI 的原始回调 body
+	// （DB 里存的就是 rdCLI 回调时的完整 JSON）
+	c.Data(200, "application/json", []byte(result))
 }
 
 // State 返回当前审稿任务状态（页面加载后恢复用）
