@@ -98,6 +98,23 @@ func (s *SQLiteStore) initSchema() error {
 		FOREIGN KEY (llm_config_id) REFERENCES llm_configs(id)
 	);
 
+	CREATE TABLE IF NOT EXISTS agent_templates (
+		id              INTEGER PRIMARY KEY AUTOINCREMENT,
+		name            TEXT NOT NULL,
+		interface_path  TEXT NOT NULL DEFAULT '',
+		description     TEXT DEFAULT '',
+		prompt_template TEXT NOT NULL,
+		output_schema   TEXT DEFAULT '{}',
+		llm_config_id   INTEGER,
+		temperature     REAL,
+		max_tokens      INTEGER,
+		enabled         INTEGER DEFAULT 1,
+		version         INTEGER DEFAULT 1,
+		created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (llm_config_id) REFERENCES llm_configs(id)
+	);
+
 	CREATE TABLE IF NOT EXISTS files (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		file_id TEXT UNIQUE NOT NULL,
@@ -157,6 +174,9 @@ func (s *SQLiteStore) initSchema() error {
 	// 兼容旧表：如果 has_seal / seal_text 列不存在则添加
 	s.db.Exec("ALTER TABLE files ADD COLUMN has_seal INTEGER DEFAULT 0")
 	s.db.Exec("ALTER TABLE files ADD COLUMN seal_text TEXT DEFAULT ''")
+
+	// 兼容旧表：如果 agent_templates.interface_path 列不存在则添加
+	s.db.Exec("ALTER TABLE agent_templates ADD COLUMN interface_path TEXT NOT NULL DEFAULT ''")
 
 	// 创建默认 admin 账号 (admin/admin)
 	var count int
@@ -438,6 +458,95 @@ func (s *SQLiteStore) DeleteInterface(id int64) error {
 
 func (s *SQLiteStore) IncrementInterfaceVersion(id int64) error {
 	_, err := s.db.Exec("UPDATE agent_interfaces SET version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=?", id)
+	return err
+}
+
+// ============================================================
+// 提示词模板
+// ============================================================
+
+func (s *SQLiteStore) ListTemplates() ([]model.TemplateConfig, error) {
+	rows, err := s.db.Query(
+		"SELECT id, name, COALESCE(interface_path,''), description, prompt_template, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM agent_templates ORDER BY id",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var templates []model.TemplateConfig
+	for rows.Next() {
+		var t model.TemplateConfig
+		var enabledInt int
+		if err := rows.Scan(&t.ID, &t.Name, &t.InterfacePath, &t.Description, &t.PromptTemplate, &t.OutputSchema, &t.LLMConfigID, &t.Temperature, &t.MaxTokens, &enabledInt, &t.Version, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		t.Enabled = enabledInt == 1
+		templates = append(templates, t)
+	}
+	if templates == nil {
+		templates = []model.TemplateConfig{}
+	}
+	return templates, nil
+}
+
+func (s *SQLiteStore) GetTemplateByID(id int64) (*model.TemplateConfig, error) {
+	t := &model.TemplateConfig{}
+	var enabledInt int
+	err := s.db.QueryRow(
+		"SELECT id, name, COALESCE(interface_path,''), description, prompt_template, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM agent_templates WHERE id=?",
+		id,
+	).Scan(&t.ID, &t.Name, &t.InterfacePath, &t.Description, &t.PromptTemplate, &t.OutputSchema, &t.LLMConfigID, &t.Temperature, &t.MaxTokens, &enabledInt, &t.Version, &t.CreatedAt, &t.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	t.Enabled = enabledInt == 1
+	return t, nil
+}
+
+func (s *SQLiteStore) GetTemplateByPath(interfacePath string) (*model.TemplateConfig, error) {
+	t := &model.TemplateConfig{}
+	var enabledInt int
+	err := s.db.QueryRow(
+		"SELECT id, name, COALESCE(interface_path,''), description, prompt_template, output_schema, llm_config_id, temperature, max_tokens, enabled, version, COALESCE(created_at,''), COALESCE(updated_at,'') FROM agent_templates WHERE interface_path=? AND enabled=1 ORDER BY id DESC LIMIT 1",
+		interfacePath,
+	).Scan(&t.ID, &t.Name, &t.InterfacePath, &t.Description, &t.PromptTemplate, &t.OutputSchema, &t.LLMConfigID, &t.Temperature, &t.MaxTokens, &enabledInt, &t.Version, &t.CreatedAt, &t.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	t.Enabled = enabledInt == 1
+	return t, nil
+}
+
+func (s *SQLiteStore) CreateTemplate(tmpl *model.TemplateConfig) error {
+	_, err := s.db.Exec(
+		"INSERT INTO agent_templates (name, interface_path, description, prompt_template, output_schema, llm_config_id, temperature, max_tokens, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		tmpl.Name, tmpl.InterfacePath, tmpl.Description, tmpl.PromptTemplate, tmpl.OutputSchema, tmpl.LLMConfigID, tmpl.Temperature, tmpl.MaxTokens, boolToInt(tmpl.Enabled),
+	)
+	return err
+}
+
+func (s *SQLiteStore) UpdateTemplate(tmpl *model.TemplateConfig) error {
+	_, err := s.db.Exec(
+		"UPDATE agent_templates SET name=?, interface_path=?, description=?, prompt_template=?, output_schema=?, llm_config_id=?, temperature=?, max_tokens=?, enabled=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+		tmpl.Name, tmpl.InterfacePath, tmpl.Description, tmpl.PromptTemplate, tmpl.OutputSchema, tmpl.LLMConfigID, tmpl.Temperature, tmpl.MaxTokens, boolToInt(tmpl.Enabled), tmpl.ID,
+	)
+	return err
+}
+
+func (s *SQLiteStore) DeleteTemplate(id int64) error {
+	_, err := s.db.Exec("DELETE FROM agent_templates WHERE id=?", id)
+	return err
+}
+
+func (s *SQLiteStore) IncrementTemplateVersion(id int64) error {
+	_, err := s.db.Exec("UPDATE agent_templates SET version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=?", id)
 	return err
 }
 

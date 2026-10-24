@@ -150,6 +150,29 @@ type InputParam struct {
 }
 
 // ============================================================
+// 提示词模板
+// ============================================================
+
+// TemplateConfig 管理员在页面上创建的提示词模板
+// 每个模板必须关联一个接口路径（如 "document/classify"），
+// 运行时按接口路径查找对应模板。
+type TemplateConfig struct {
+	ID             int64    `json:"id"`
+	Name           string   `json:"name"`            // 模板标题，如"区分公文类型"
+	InterfacePath  string   `json:"interface_path"`  // 关联的接口路径
+	Description    string   `json:"description"`     // 用途说明
+	PromptTemplate string   `json:"prompt_template"` // 提示词内容，含 {{占位符}}
+	OutputSchema   string   `json:"output_schema"`   // 输出 JSON Schema
+	LLMConfigID    *int64   `json:"llm_config_id"`
+	Temperature    *float64 `json:"temperature"`
+	MaxTokens      *int     `json:"max_tokens"`
+	Enabled        bool     `json:"enabled"`
+	Version        int      `json:"version"`
+	CreatedAt      string   `json:"created_at"`
+	UpdatedAt      string   `json:"updated_at"`
+}
+
+// ============================================================
 // 文件记录
 // ============================================================
 
@@ -288,6 +311,40 @@ type APIToken struct {
 // ============================================================
 // LLM 调用相关
 // ============================================================
+
+// ============================================================
+// Pipeline 相关类型
+// ============================================================
+
+// DownloadedFile 已下载并解析的单个文件
+type DownloadedFile struct {
+	URL        string
+	FileName   string
+	FileType   string // main_body / attachment / doc_basis
+	LocalPath  string
+	Text       string
+	HasSeal    bool
+	SealTexts  []string
+	Status     string // ok / download_failed / extract_failed
+	ErrorMsg   string
+	DurationMs int64
+}
+
+// DownloadResult 下载步骤产出
+type DownloadResult struct {
+	MainBody    []string         // 正文文本（可能多个）
+	Attachments []string         // 附件文本
+	DocBasis    []string         // 办文依据文本
+	SealTexts   []string         // 所有印章文字（去重）
+	FlatItems   []DownloadedFile // 扁平列表
+}
+
+// FileURLItem 从请求 JSON 中提取的文件条目
+type FileURLItem struct {
+	URL      string
+	FileType string // main_body / attachment / doc_basis
+	FileName string
+}
 
 // ChatCompletionMsg 消息
 type ChatCompletionMsg struct {

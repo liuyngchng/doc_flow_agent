@@ -163,13 +163,21 @@ func main() {
 			admin.DELETE("/llm-configs/:id", h.LLMConfig.Delete)
 			admin.PUT("/llm-configs/:id/default", h.LLMConfig.SetDefault)
 
-			// 接口管理
+			// 接口管理（旧，向后兼容，逐步废弃）
 			admin.GET("/interfaces", h.Interface.List)
 			admin.GET("/interfaces/:id", h.Interface.Get)
 			admin.POST("/interfaces", h.Interface.Create)
 			admin.PUT("/interfaces/:id", h.Interface.Update)
 			admin.DELETE("/interfaces/:id", h.Interface.Delete)
 			admin.POST("/interfaces/:id/test", h.Interface.Test)
+
+			// 提示词模板管理
+			admin.GET("/templates", h.Template.List)
+			admin.GET("/templates/:id", h.Template.Get)
+			admin.POST("/templates", h.Template.Create)
+			admin.PUT("/templates/:id", h.Template.Update)
+			admin.DELETE("/templates/:id", h.Template.Delete)
+			admin.GET("/template-interfaces", h.Template.ListInterfaces)
 
 			// 文件管理
 			admin.GET("/files", h.File.List)

@@ -25,7 +25,7 @@
                     <i class="fas fa-robot"></i> 模型配置
                 </div>
                 <div class="cfg-tab" data-tab="interfaces">
-                    <i class="fas fa-code"></i> 接口管理
+                    <i class="fas fa-file-alt"></i> 模板管理
                 </div>
                 <div class="cfg-divider"></div>
                 <div class="cfg-tab" data-tab="files">
@@ -92,38 +92,34 @@
                     </div>
                 </div>
 
-                <!-- 接口管理 -->
+                <!-- 模板管理 -->
                 <div class="cfg-section" id="section-interfaces">
-                    <h2><i class="fas fa-code"></i> 接口管理</h2>
-                    <p style="color:#888;margin-bottom:16px;">配置接口，定义提示词模板。电子公文工作流通过 <code>/api/v1/{path}</code> 调用。</p>
+                    <h2><i class="fas fa-file-alt"></i> 模板管理</h2>
+                    <p style="color:#888;margin-bottom:16px;">创建提示词模板（含标题、提示词内容），每个模板有独立ID。接口代码通过模板ID引用模板。</p>
                     <button class="cfg-btn cfg-btn-save" onclick="showIfaceModal()" style="margin-bottom:16px;">
-                        <i class="fas fa-plus"></i> 新建接口
+                        <i class="fas fa-plus"></i> 新建模板
                     </button>
                     <table class="result-table">
-                        <thead><tr><th>ID</th><th>名称</th><th>路径</th><th>状态</th><th>版本</th><th>操作</th></tr></thead>
+                        <thead><tr><th>ID</th><th>标题</th><th>关联接口</th><th>状态</th><th>版本</th><th>操作</th></tr></thead>
                         <tbody id="ifacesTbody"><tr><td colspan="6" style="text-align:center;color:#999;">加载中...</td></tr></tbody>
                     </table>
 
-                    <!-- 接口编辑弹窗 -->
+                    <!-- 模板编辑弹窗 -->
                     <div id="ifaceModal" class="modal-overlay">
                         <div class="modal-lg">
-                            <h3 id="ifaceModalTitle"><i class="fas fa-code"></i> 新建接口</h3>
+                            <h3 id="ifaceModalTitle"><i class="fas fa-file-alt"></i> 新建模板</h3>
                             <form id="ifaceForm" style="margin-top:20px;">
                                 <input type="hidden" id="ifaceId" value="0">
-                                <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                    <div class="form-g" style="flex:1;min-width:200px;">
-                                        <label>接口名称 <span style="color:#e53935;">*</span></label>
-                                        <input type="text" id="ifaceName" required placeholder="如：收文类型判断" style="width:100%;">
-                                    </div>
-                                    <div class="form-g" style="flex:1;min-width:200px;">
-                                        <label>接口路径 <span style="color:#e53935;">*</span></label>
-                                        <input type="text" id="ifacePath" required placeholder="如：document/classify" style="width:100%;">
-                                        <small style="color:#888;">调用地址: <code>/api/v1/{path}</code></small>
-                                    </div>
+                                <div class="form-g">
+                                    <label>模板标题 <span style="color:#e53935;">*</span></label>
+                                    <input type="text" id="ifaceName" required placeholder="如：区分公文类型" style="width:100%;">
                                 </div>
                                 <div class="form-g">
-                                    <label>描述</label>
-                                    <input type="text" id="ifaceDesc" placeholder="接口用途说明" style="width:100%;">
+                                    <label>关联接口 <span style="color:#e53935;">*</span></label>
+                                    <select id="ifacePath" required style="width:100%;padding:10px 14px;border:2px solid #e0e3e8;border-radius:8px;">
+                                        <option value="">-- 选择接口 --</option>
+                                    </select>
+                                    <small style="color:#888;">每个模板必须关联一个代码中定义的接口</small>
                                 </div>
                                 <div style="display:flex;gap:12px;flex-wrap:wrap;">
                                     <div class="form-g" style="flex:1;">
@@ -143,20 +139,13 @@
                                     <label>提示词模板 <span style="color:#e53935;">*</span></label>
                                     <textarea id="ifacePrompt" rows="10" placeholder="输入提示词模板..." style="width:100%;min-height:200px;"></textarea>
                                 </div>
-                                <details style="margin-bottom:20px;">
-                                    <summary style="cursor:pointer;color:#4b6cb7;font-weight:600;">输入参数定义 (可选)</summary>
-                                    <div id="inputParamsContainer" style="margin-top:8px;"></div>
-                                    <button type="button" class="cfg-btn cfg-btn-reset" onclick="addInputParam()" style="margin-top:8px;padding:6px 14px;">
-                                        <i class="fas fa-plus"></i> 添加参数
-                                    </button>
-                                </details>
                                 <div class="form-g">
                                     <label>输出 JSON Schema <span style="color:#999;">(可选)</span></label>
                                     <textarea id="ifaceSchema" rows="6" placeholder='{"type":"object","properties":{"result":{"type":"string"}}}' style="width:100%;min-height:120px;"></textarea>
                                 </div>
                                 <div style="margin-bottom:16px;">
                                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                                        <input type="checkbox" id="ifaceEnabled" checked> 启用此接口
+                                        <input type="checkbox" id="ifaceEnabled" checked> 启用此模板
                                     </label>
                                 </div>
                                 <div class="modal-actions">

@@ -5,11 +5,13 @@
 ## 功能
 
 - **文件预处理**：DOCX / 文字 PDF / XLSX 文本提取，支持印章检测
-- **可配置 LLM 接口**：管理员在 GUI 中配置提示词模板、输出 Schema，自动生成对外 API
+- **提示词模板管理**：管理员在 GUI 中创建提示词模板（标题 + 提示词内容），每个模板关联一个代码中定义的接口路径
+- **接口代码化**：对外接口路径在 `internal/interfaces/registry.go` 中硬编码，通过 `interface_path` 与模板关联
+- **Pipeline 流程封装**：所有接口统一走 download → extract → translate → render → llm → callback 流程，每步独立封装；各接口可通过 PreProcess/PostProcess 钩子注入差异化逻辑
 - **异步任务处理**：接收请求后立即返回 `{code, task_id, linkid}`，后台 Worker 下载文件→调用 LLM→回调结果
 - **任务管理**：支持查询进行中任务、取消排队中任务、全链路追踪查询
 - **全链路追踪**：`task_trace` 表记录每一步的输入输出和时间线，包括 request_body / files_text / files_summary / llm_prompt / llm_raw_output / output_result / callback_body / timeline，失败原因写入 error_message
-- **管理后台**：登录、AI 接口管理、LLM 模型配置、文件管理、任务日志、审稿模拟
+- **管理后台**：登录、模板管理、LLM 模型配置、文件管理、任务日志、审稿模拟
 - **权限控制**：admin 拥有全部管理权限；普通用户仅可查看任务日志
 
 ## 架构
@@ -269,6 +271,8 @@ doc_flow_agent/
 │   ├── model/                 # 数据结构
 │   ├── store/                 # SQLite 存储
 │   ├── handler/               # HTTP 处理器（含异步 Worker）
+│   ├── pipeline/              # Pipeline 步骤封装（download/extract/translate/render/llm/callback）
+│   ├── interfaces/            # 接口注册表（代码中硬编码，通过 interface_path 关联模板）
 │   ├── preprocess/            # 文件预处理
 │   ├── llm/                   # LLM 客户端
 │   └── logger/                # 日志

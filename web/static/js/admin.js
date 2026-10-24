@@ -37,32 +37,46 @@ document.querySelectorAll('.cfg-tab').forEach(tab => {
 });
 
 // ============================================================
-// Interfaces (接口管理) CRUD
+// Templates (模板管理) CRUD
 // ============================================================
 async function loadInterfaces() {
     try {
-        var resp = await fetch('/api/inner/interfaces');
+        var resp = await fetch('/api/inner/templates');
         var json = await resp.json();
         var data = json.data || [];
         var tbody = document.getElementById('ifacesTbody');
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">暂无接口</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">暂无模板</td></tr>';
             return;
         }
-        tbody.innerHTML = data.map(function(iface) {
+        tbody.innerHTML = data.map(function(tmpl) {
             return '<tr>' +
-                '<td>' + iface.id + '</td>' +
-                '<td><strong>' + esc(iface.name) + '</strong></td>' +
-                '<td><code>/api/v1/' + esc(iface.path) + '</code></td>' +
-                '<td>' + (iface.enabled ? '<span class="badge badge-success">启用</span>' : '<span class="badge badge-gray">禁用</span>') + '</td>' +
-                '<td>v' + iface.version + '</td>' +
+                '<td>' + tmpl.id + '</td>' +
+                '<td><strong>' + esc(tmpl.name) + '</strong></td>' +
+                '<td><code>' + esc(tmpl.interface_path || '-') + '</code></td>' +
+                '<td>' + (tmpl.enabled ? '<span class="badge badge-success">启用</span>' : '<span class="badge badge-gray">禁用</span>') + '</td>' +
+                '<td>v' + tmpl.version + '</td>' +
                 '<td>' +
-                    '<button class="cfg-btn cfg-btn-reset" onclick="editIface(' + iface.id + ')" style="padding:4px 10px;font-size:0.8rem;">编辑</button>' +
-                    '<button class="cfg-btn cfg-btn-reset" onclick="testIface(' + iface.id + ')" style="padding:4px 10px;font-size:0.8rem;margin-left:4px;">测试</button>' +
-                    '<button class="cfg-btn cfg-btn-reset" onclick="deleteIface(' + iface.id + ')" style="padding:4px 10px;font-size:0.8rem;margin-left:4px;color:#c62828;">删除</button>' +
+                    '<button class="cfg-btn cfg-btn-reset" onclick="editIface(' + tmpl.id + ')" style="padding:4px 10px;font-size:0.8rem;">编辑</button>' +
+                    '<button class="cfg-btn cfg-btn-reset" onclick="deleteIface(' + tmpl.id + ')" style="padding:4px 10px;font-size:0.8rem;margin-left:4px;color:#c62828;">删除</button>' +
                 '</td>' +
             '</tr>';
         }).join('');
+    } catch (err) {
+        toast('加载模板列表失败: ' + err.message, 'error');
+    }
+}
+
+// 加载接口列表到下拉框（代码中注册的接口）
+async function loadTemplateInterfacesForSelect(selectedPath) {
+    try {
+        var resp = await fetch('/api/inner/template-interfaces');
+        var json = await resp.json();
+        var sel = document.getElementById('ifacePath');
+        sel.innerHTML = '<option value="">-- 选择接口 --</option>';
+        (json.data || []).forEach(function(def) {
+            sel.innerHTML += '<option value="' + esc(def.Path) + '"' + (def.Path === selectedPath ? ' selected' : '') + '>' + esc(def.Name) + ' (' + esc(def.Path) + ')</option>';
+        });
     } catch (err) {
         toast('加载接口列表失败: ' + err.message, 'error');
     }
@@ -70,47 +84,40 @@ async function loadInterfaces() {
 
 function showIfaceModal() {
     currentIfaceId = 0;
-    document.getElementById('ifaceModalTitle').innerHTML = '<i class="fas fa-code"></i> 新建接口';
+    document.getElementById('ifaceModalTitle').innerHTML = '<i class="fas fa-file-alt"></i> 新建模板';
     document.getElementById('ifaceId').value = '0';
     document.getElementById('ifaceName').value = '';
-    document.getElementById('ifacePath').value = '';
     document.getElementById('ifaceDesc').value = '';
     document.getElementById('ifacePrompt').value = '';
     document.getElementById('ifaceSchema').value = '';
     document.getElementById('ifaceTemp').value = '';
     document.getElementById('ifaceMaxTok').value = '';
     document.getElementById('ifaceEnabled').checked = true;
-    document.getElementById('inputParamsContainer').innerHTML = '';
     document.getElementById('ifaceModal').classList.add('show');
     loadLLMForSelect();
+    loadTemplateInterfacesForSelect('');
 }
 
 async function editIface(id) {
     try {
-        var resp = await fetch('/api/inner/interfaces/' + id);
+        var resp = await fetch('/api/inner/templates/' + id);
         var json = await resp.json();
-        var iface = json.data;
-        currentIfaceId = iface.id;
-        document.getElementById('ifaceModalTitle').innerHTML = '<i class="fas fa-code"></i> 编辑接口';
-        document.getElementById('ifaceId').value = iface.id;
-        document.getElementById('ifaceName').value = iface.name;
-        document.getElementById('ifacePath').value = iface.path;
-        document.getElementById('ifaceDesc').value = iface.description || '';
-        document.getElementById('ifacePrompt').value = iface.prompt_template;
-        document.getElementById('ifaceSchema').value = iface.output_schema || '';
-        document.getElementById('ifaceTemp').value = iface.temperature || '';
-        document.getElementById('ifaceMaxTok').value = iface.max_tokens || '';
-        document.getElementById('ifaceEnabled').checked = iface.enabled;
+        var tmpl = json.data;
+        currentIfaceId = tmpl.id;
+        document.getElementById('ifaceModalTitle').innerHTML = '<i class="fas fa-file-alt"></i> 编辑模板';
+        document.getElementById('ifaceId').value = tmpl.id;
+        document.getElementById('ifaceName').value = tmpl.name;
+        document.getElementById('ifaceDesc').value = tmpl.description || '';
+        document.getElementById('ifacePrompt').value = tmpl.prompt_template;
+        document.getElementById('ifaceSchema').value = tmpl.output_schema || '';
+        document.getElementById('ifaceTemp').value = tmpl.temperature || '';
+        document.getElementById('ifaceMaxTok').value = tmpl.max_tokens || '';
+        document.getElementById('ifaceEnabled').checked = tmpl.enabled;
         document.getElementById('ifaceModal').classList.add('show');
-        loadLLMForSelect(iface.llm_config_id);
-        // Render input params
-        var container = document.getElementById('inputParamsContainer');
-        container.innerHTML = '';
-        (iface.input_params || []).forEach(function(p) {
-            addInputParamRow(p.name, p.source, p.required, p['default'] || '');
-        });
+        loadLLMForSelect(tmpl.llm_config_id);
+        loadTemplateInterfacesForSelect(tmpl.interface_path);
     } catch (err) {
-        toast('加载接口失败: ' + err.message, 'error');
+        toast('加载模板失败: ' + err.message, 'error');
     }
 }
 
@@ -118,62 +125,26 @@ function hideIfaceModal() {
     document.getElementById('ifaceModal').classList.remove('show');
 }
 
-function addInputParam(name, source, required, defVal) {
-    addInputParamRow(name || '', source || '', required || false, defVal || '');
-}
-
-function addInputParamRow(name, source, required, defVal) {
-    var container = document.getElementById('inputParamsContainer');
-    var row = document.createElement('div');
-    row.className = 'param-row';
-    row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
-    row.innerHTML =
-        '<input type="text" class="param-name" placeholder="名称" value="' + esc(name) + '" style="flex:1;padding:6px 10px;border:1px solid #e0e3e8;border-radius:6px;font-size:0.82rem;">' +
-        '<input type="text" class="param-source" placeholder="来源" value="' + esc(source) + '" style="flex:2;padding:6px 10px;border:1px solid #e0e3e8;border-radius:6px;font-size:0.82rem;">' +
-        '<label style="display:flex;align-items:center;gap:4px;font-size:0.8rem;white-space:nowrap;"><input type="checkbox" class="param-required" ' + (required ? 'checked' : '') + '> 必填</label>' +
-        '<input type="text" class="param-default" placeholder="默认值" value="' + esc(defVal) + '" style="flex:1;padding:6px 10px;border:1px solid #e0e3e8;border-radius:6px;font-size:0.82rem;">' +
-        '<button type="button" class="cfg-btn cfg-btn-reset" onclick="this.parentElement.remove()" style="padding:4px 8px;">×</button>';
-    container.appendChild(row);
-}
-
-function collectInputParams() {
-    var params = [];
-    document.querySelectorAll('#inputParamsContainer .param-row').forEach(function(row) {
-        var name = row.querySelector('.param-name').value.trim();
-        var source = row.querySelector('.param-source').value.trim();
-        if (name && source) {
-            params.push({
-                name: name,
-                source: source,
-                required: row.querySelector('.param-required').checked,
-                'default': row.querySelector('.param-default').value || ''
-            });
-        }
-    });
-    return params;
-}
-
 document.getElementById('ifaceForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     var data = {
         name: document.getElementById('ifaceName').value.trim(),
-        path: document.getElementById('ifacePath').value.trim(),
+        interface_path: document.getElementById('ifacePath').value.trim(),
         description: document.getElementById('ifaceDesc').value.trim(),
         prompt_template: document.getElementById('ifacePrompt').value.trim(),
         output_schema: document.getElementById('ifaceSchema').value.trim(),
         llm_config_id: parseInt(document.getElementById('ifaceLLM').value) || null,
         temperature: parseFloat(document.getElementById('ifaceTemp').value) || null,
         max_tokens: parseInt(document.getElementById('ifaceMaxTok').value) || null,
-        enabled: document.getElementById('ifaceEnabled').checked,
-        input_params: collectInputParams()
+        enabled: document.getElementById('ifaceEnabled').checked
     };
 
-    if (!data.name || !data.path || !data.prompt_template) {
-        toast('名称、路径和提示词模板不能为空', 'error'); return;
+    if (!data.name || !data.interface_path || !data.prompt_template) {
+        toast('标题、关联接口和提示词模板不能为空', 'error'); return;
     }
 
     try {
-        var url = '/api/inner/interfaces';
+        var url = '/api/inner/templates';
         var method = 'POST';
         if (currentIfaceId > 0) {
             url += '/' + currentIfaceId;
@@ -193,28 +164,10 @@ document.getElementById('ifaceForm').addEventListener('submit', async function(e
     }
 });
 
-async function testIface(id) {
-    try {
-        var resp = await fetch('/api/inner/interfaces/' + id);
-        var json = await resp.json();
-        var iface = json.data;
-        // Show rendered prompt
-        var testResp = await fetch('/api/inner/interfaces/' + id + '/test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ test: true })
-        });
-        var testJson = await testResp.json();
-        alert('接口: ' + iface.name + '\n路径: ' + iface.path + '\n\n渲染后的提示词:\n' + testJson.rendered_prompt.substring(0, 1000) + '...');
-    } catch (err) {
-        toast('测试失败: ' + err.message, 'error');
-    }
-}
-
 async function deleteIface(id) {
-    if (!confirm('确定删除此接口？')) return;
+    if (!confirm('确定删除此模板？')) return;
     try {
-        var resp = await fetch('/api/inner/interfaces/' + id, { method: 'DELETE' });
+        var resp = await fetch('/api/inner/templates/' + id, { method: 'DELETE' });
         var json = await resp.json();
         if (json.status === 'ok') { toast('删除成功', 'success'); loadInterfaces(); }
         else { toast(json.error || '删除失败', 'error'); }
@@ -452,14 +405,18 @@ function hideTaskDetail() {
 // 操作模拟
 // ============================================================
 async function loadInterfacesForSelect() {
-    try {
-        var resp = await fetch('/api/inner/interfaces'); var json = await resp.json();
-        var sel = document.getElementById('oaInterface');
-        sel.innerHTML = '<option value="">-- 选择接口 --</option>';
-        (json.data || []).forEach(function(iface) {
-            if (iface.enabled) sel.innerHTML += '<option value="' + esc(iface.path) + '">' + esc(iface.name) + ' (' + esc(iface.path) + ')</option>';
-        });
-    } catch (_) {}
+    // 接口现在由代码定义（internal/interfaces/registry.go），此处展示已注册的接口
+    // 与后端保持同步的固定列表
+    var ifaces = [
+        { path: 'document/classify', name: '收文分类' },
+        { path: 'document/route', name: '流转目标识别' },
+        { path: 'document/dispatch-review', name: '发文审核' }
+    ];
+    var sel = document.getElementById('oaInterface');
+    sel.innerHTML = '<option value="">-- 选择接口 --</option>';
+    ifaces.forEach(function(iface) {
+        sel.innerHTML += '<option value="' + esc(iface.path) + '">' + esc(iface.name) + ' (' + esc(iface.path) + ')</option>';
+    });
 }
 
 async function oaCall() {

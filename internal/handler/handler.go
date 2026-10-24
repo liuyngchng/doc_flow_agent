@@ -11,7 +11,8 @@ type Handler struct {
 	Auth      *AuthHandler
 	Page      *PageHandler
 	File      *FileHandler
-	Interface *InterfaceHandler
+	Interface *InterfaceHandler // 向后兼容，逐步废弃
+	Template  *TemplateHandler  // 提示词模板管理
 	LLMConfig *LLMConfigHandler
 	Call      *CallHandler
 	CallLog   *TaskTraceHandler
@@ -34,6 +35,7 @@ func New(cfg *model.Config, st store.MetaStore) *Handler {
 		Page:      NewPageHandler(cfg),
 		File:      NewFileHandler(cfg, st),
 		Interface: NewInterfaceHandler(st),
+		Template:  NewTemplateHandler(st),
 		LLMConfig: NewLLMConfigHandler(st),
 		Call:      call,
 		CallLog:   NewTaskTraceHandler(st),

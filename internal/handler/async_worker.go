@@ -1,19 +1,14 @@
 package handler
 
 import (
-	"bytes"
-	"crypto/tls"
 	"encoding/json"
-	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"doc_flow_agent/internal/llm"
+	"doc_flow_agent/internal/interfaces"
 	"doc_flow_agent/internal/model"
+	"doc_flow_agent/internal/pipeline"
 	"doc_flow_agent/internal/store"
 )
 
@@ -21,8 +16,7 @@ import (
 type AsyncWorker struct {
 	store    store.MetaStore
 	cfg      *model.Config
-	callH    *CallHandler
-	taskChan chan string // channel 里放 taskID
+	taskChan chan string
 	stopCh   chan struct{}
 }
 
@@ -32,22 +26,12 @@ func NewAsyncWorker(st store.MetaStore, cfg *model.Config) *AsyncWorker {
 	if bufSize <= 0 {
 		bufSize = 10
 	}
-	w := &AsyncWorker{
+	return &AsyncWorker{
 		store:    st,
 		cfg:      cfg,
-		callH:    NewCallHandler(st, cfg),
 		taskChan: make(chan string, bufSize),
 		stopCh:   make(chan struct{}),
 	}
-	return w
-}
-
-// callbackHTTPClient 回调专用 HTTP 客户端（跳过 TLS 证书验证，兼容自签证书）
-var callbackHTTPClient = &http.Client{
-	Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	},
-	Timeout: 30 * time.Second,
 }
 
 // Start 启动 Worker goroutines
@@ -62,13 +46,13 @@ func (w *AsyncWorker) Start() {
 	slog.Info("async_worker_started", "workers", workerCount, "max_pending", w.cfg.Sys.MaxPendingTasks)
 }
 
-// Stop 停止 Worker（等待当前处理中的任务完成）
+// Stop 停止 Worker
 func (w *AsyncWorker) Stop() {
 	close(w.stopCh)
 	slog.Info("async_worker_stopping")
 }
 
-// Enqueue 将 taskID 放入 channel 队列
+// Enqueue 将 taskID 放入 channel
 func (w *AsyncWorker) Enqueue(taskID string) {
 	w.taskChan <- taskID
 }
@@ -87,34 +71,9 @@ func (w *AsyncWorker) worker(idx int) {
 	}
 }
 
-// -------------------------------- timeline helpers --------------------------------
-
-func nowISO() string {
-	return time.Now().Format("2006-01-02T15:04:05.000-07:00")
-}
-
-func newTimeline(step string) []model.TimelineEntry {
-	return []model.TimelineEntry{{Step: step, At: nowISO()}}
-}
-
-func appendTimeline(existing []model.TimelineEntry, step string, durMs int64, attempt int) []model.TimelineEntry {
-	e := model.TimelineEntry{Step: step, At: nowISO(), DurationMs: durMs}
-	if attempt > 0 {
-		e.Attempt = attempt
-	}
-	return append(existing, e)
-}
-
-func marshalTimeline(tl []model.TimelineEntry) string {
-	b, _ := json.Marshal(tl)
-	return string(b)
-}
-
-// --------------------------------------------------------------------------------
-
-// process 处理单个异步任务
+// process 处理单个异步任务 — 使用 Pipeline
 func (w *AsyncWorker) process(taskID string, workerIdx int) {
-	// 检查 DB 中任务是否还存在
+	// 检查 DB 中任务是否存在
 	trace, err := w.store.GetTaskTrace(taskID)
 	if err != nil || trace == nil {
 		slog.Warn("task_gone", "task_id", taskID, "worker", workerIdx)
@@ -124,238 +83,123 @@ func (w *AsyncWorker) process(taskID string, workerIdx int) {
 		return
 	}
 
-	linkid := trace.LinkID
-	slog.Info("task_start", "task_id", taskID, "linkid", linkid, "interface", trace.InterfacePath, "worker", workerIdx)
+	slog.Info("task_start", "task_id", taskID, "linkid", trace.LinkID, "interface", trace.InterfacePath, "worker", workerIdx)
 
-	// 更新状态为 processing，追加 process_start
-	var tl []model.TimelineEntry
-	if trace.Timeline != "" {
-		json.Unmarshal([]byte(trace.Timeline), &tl)
-	}
-	tl = appendTimeline(tl, "process_start", 0, 0)
+	// 更新状态为 processing
 	trace.Status = model.TaskStatusProcessing
-	trace.Timeline = marshalTimeline(tl)
+	timeline := pipeline.NewTimeline()
+	timeline.Record("process_start")
+	trace.Timeline = timeline.Marshal()
 	w.store.UpdateTaskTrace(trace)
 
-	// 查找接口配置
-	iface, err := w.store.GetInterfaceByPath(trace.InterfacePath)
-	if err != nil || iface == nil || !iface.Enabled {
-		w.failTrace(trace, "接口不存在或已禁用: "+trace.InterfacePath, tl)
+	// 从注册表查找接口定义
+	def := interfaces.Registry[trace.InterfacePath]
+	if def == nil {
+		w.failTrace(trace, "接口不存在: "+trace.InterfacePath, timeline)
 		return
 	}
 
 	// 解析请求体
 	var rawBody map[string]interface{}
 	if err := json.Unmarshal([]byte(trace.RequestBody), &rawBody); err != nil {
-		w.failTrace(trace, "解析请求体失败: "+err.Error(), tl)
+		w.failTrace(trace, "解析请求体失败: "+err.Error(), timeline)
 		return
 	}
 
-	// ---- download -----------------------------------------------------------
-	dlStart := time.Now()
-	files := w.callH.downloadAllFileURLs(rawBody, taskID)
-	dlDur := time.Since(dlStart).Milliseconds()
-
-	// 构造 files_text（含全文）+ files_summary（轻量摘要）
-	filesText, filesSummary := buildFilesTextAndSummary(files)
-	trace.FilesText = mustJSON(filesText)
-	trace.FilesSummary = mustJSON(filesSummary)
-
-	// 收集文件层失败信息（不阻断任务，仅记录警告）
-	if fileErrs := collectFileErrors(filesSummary); len(fileErrs) > 0 {
-		trace.ErrorMessage = "部分文件处理失败: " + strings.Join(fileErrs, "; ")
-		slog.Warn("task_file_errors", "task_id", taskID, "errors", trace.ErrorMessage)
+	// 构建 Pipeline 上下文
+	ctx := &pipeline.TaskContext{
+		TaskID:      taskID,
+		LinkID:      trace.LinkID,
+		Interface:   def,
+		RawBody:     rawBody,
+		RawBodyStr:  trace.RequestBody,
+		CallbackURL: trace.CallbackURL,
+		Store:       w.store,
+		Cfg:         w.cfg,
+		Trace:       trace,
+		Timeline:    timeline,
 	}
 
-	tl = appendTimeline(tl, "download", dlDur, 0)
-	// ---- download done ------------------------------------------------------
-
-	// 渲染 prompt
-	systemPrompt := w.callH.buildSystemPrompt(iface)
-	userPrompt, err := w.callH.renderPrompt(iface, trace.RequestBody, files)
-	if err != nil {
-		w.failTrace(trace, err.Error(), tl)
-		return
-	}
-	trace.LLMRequestPrompt = userPrompt
-
-	// 获取 LLM 配置
-	llmCfg, err := w.callH.getLLMConfig(iface)
-	if err != nil {
-		w.failTrace(trace, err.Error(), tl)
+	// 加载模板
+	if err := ctx.LoadTemplate(); err != nil {
+		w.failTrace(trace, err.Error(), timeline)
 		return
 	}
 
-	// ---- llm ----------------------------------------------------------------
-	client := llm.New(llmCfg.APIURI, llmCfg.APIKey, llmCfg.ModelName)
-
-	temperature := iface.Temperature
-	if temperature == nil {
-		t := llmCfg.Temperature
-		temperature = &t
-	}
-	maxTokens := iface.MaxTokens
-	if maxTokens == nil {
-		mt := llmCfg.MaxTokens
-		maxTokens = &mt
-	}
-
-	llmStart := time.Now()
-	resultText, llmErr := client.Chat(systemPrompt, userPrompt, temperature, maxTokens)
-	llmDur := time.Since(llmStart).Milliseconds()
-
-	trace.LLMRawOutput = resultText
-	tl = appendTimeline(tl, "llm", llmDur, 0)
-	// ---- llm done -----------------------------------------------------------
-
-	if llmErr != nil {
-		slog.Error("task_llm_error", "task_id", taskID, "linkid", linkid, "interface", trace.InterfacePath, "error", llmErr)
-		trace.ErrorMessage = llmErr.Error()
+	// 执行 Pipeline
+	if err := pipeline.Run(ctx); err != nil {
+		slog.Error("task_pipeline_error", "task_id", taskID, "linkid", trace.LinkID, "interface", trace.InterfacePath, "error", err)
+		ctx.Status = model.TaskStatusFailed
+		ctx.ErrorMessage = err.Error()
 		trace.Status = model.TaskStatusFailed
-		trace.Timeline = marshalTimeline(tl)
+		trace.ErrorMessage = err.Error()
+		trace.Timeline = timeline.Marshal()
 		trace.FinishedAt = nowISO()
 		w.store.UpdateTaskTrace(trace)
-		w.doCallback(trace)
+		w.doCallback(ctx, nil)
 		return
 	}
 
-	// 包装输出
-	output := w.callH.wrapOutput(resultText, iface.OutputSchema)
+	// Pipeline 成功 → 包装输出
+	output := pipeline.WrapOutput(ctx.LLMRawOutput, ctx.Template.OutputSchema)
+	ctx.OutputResult = &output
+
+	// 更新 trace
 	trace.Status = model.TaskStatusSuccess
 	trace.OutputResult = mustJSON(output)
+	trace.LLMRequestPrompt = ctx.SystemPrompt + "\n\n" + ctx.RenderedPrompt
+	trace.LLMRawOutput = ctx.LLMRawOutput
+	trace.Timeline = timeline.Marshal()
 	trace.FinishedAt = nowISO()
-	trace.Timeline = marshalTimeline(tl)
+
+	// 文件信息落库
+	if ctx.DownloadResult != nil {
+		filesText, filesSummary := buildFilesTextAndSummary(ctx.DownloadResult)
+		trace.FilesText = mustJSON(filesText)
+		trace.FilesSummary = mustJSON(filesSummary)
+		if fileErrs := collectFileErrors(filesSummary); len(fileErrs) > 0 {
+			trace.ErrorMessage = "部分文件处理失败: " + fileErrs[0]
+			slog.Warn("task_file_errors", "task_id", taskID, "errors", fileErrs)
+		}
+	}
+
 	w.store.UpdateTaskTrace(trace)
 
-	slog.Info("task_done", "task_id", taskID, "linkid", linkid, "status", trace.Status, "worker", workerIdx)
+	ctx.Status = model.TaskStatusSuccess
+	slog.Info("task_done", "task_id", taskID, "linkid", trace.LinkID, "status", trace.Status, "worker", workerIdx)
 
-	// 回调
-	w.doCallback(trace)
+	w.doCallback(ctx, &output)
 }
 
-// failTrace 标记任务失败，落库 + 回调
-func (w *AsyncWorker) failTrace(trace *model.TaskTrace, errMsg string, tl []model.TimelineEntry) {
+// failTrace 标记任务失败
+func (w *AsyncWorker) failTrace(trace *model.TaskTrace, errMsg string, tl *pipeline.TimelineRecorder) {
 	trace.Status = model.TaskStatusFailed
 	trace.ErrorMessage = errMsg
-	trace.Timeline = marshalTimeline(tl)
+	trace.Timeline = tl.Marshal()
 	trace.FinishedAt = nowISO()
 	w.store.UpdateTaskTrace(trace)
 	slog.Error("task_failed", "task_id", trace.TaskID, "linkid", trace.LinkID, "error", errMsg)
-	w.doCallback(trace)
 }
 
 // doCallback 向 callback_url 发送结果
-func (w *AsyncWorker) doCallback(trace *model.TaskTrace) {
-	maxRetries := w.cfg.Sys.CallbackRetries
-	if maxRetries <= 0 {
-		maxRetries = 3
+func (w *AsyncWorker) doCallback(ctx *pipeline.TaskContext, output *model.APIResponse) {
+	result := pipeline.DoCallback(ctx, output)
+
+	// 更新 trace
+	ctx.Trace.CallbackBody = result.Body
+	ctx.Trace.RetryCount = result.RetryCount
+	ctx.Trace.Timeline = ctx.Timeline.Marshal()
+	if result.FinalStatus != "" {
+		ctx.Trace.Status = result.FinalStatus
 	}
-	retryInterval := w.cfg.Sys.CallbackRetryInterval
-	if retryInterval <= 0 {
-		retryInterval = 2
+	if result.ErrorMsg != "" && ctx.Trace.ErrorMessage == "" {
+		ctx.Trace.ErrorMessage = result.ErrorMsg
 	}
-
-	// 构造回调 body
-	var body []byte
-	if trace.Status == model.TaskStatusSuccess {
-		var output model.APIResponse
-		json.Unmarshal([]byte(trace.OutputResult), &output)
-		body, _ = json.Marshal(map[string]interface{}{
-			"code":    model.ErrCodeSuccess,
-			"message": "success",
-			"task_id": trace.TaskID,
-			"linkid":  trace.LinkID,
-			"data":    output.Data,
-		})
-	} else {
-		body, _ = json.Marshal(map[string]interface{}{
-			"code":    model.ErrCodeInternal,
-			"message": trace.ErrorMessage,
-			"task_id": trace.TaskID,
-			"linkid":  trace.LinkID,
-			"data":    nil,
-		})
-	}
-
-	trace.CallbackBody = string(body)
-
-	// 载入已有 timeline
-	var tl []model.TimelineEntry
-	if trace.Timeline != "" {
-		json.Unmarshal([]byte(trace.Timeline), &tl)
-	}
-
-	token := w.cfg.Sys.CallbackToken
-
-	var lastErr error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		cbStart := time.Now()
-		req, err := http.NewRequest(http.MethodPost, trace.CallbackURL, bytes.NewReader(body))
-		if err != nil {
-			slog.Error("callback_req_create_failed", "task_id", trace.TaskID, "linkid", trace.LinkID, "error", err)
-			lastErr = err
-			break
-		}
-		req.Header.Set("Content-Type", "application/json; charset=utf-8")
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-
-		resp, err := callbackHTTPClient.Do(req)
-		cbDur := time.Since(cbStart).Milliseconds()
-
-		if err != nil {
-			slog.Warn("callback_retry", "task_id", trace.TaskID, "linkid", trace.LinkID, "callback_url", trace.CallbackURL, "error", err, "attempt", fmt.Sprintf("%d/%d", attempt, maxRetries))
-			trace.RetryCount = attempt
-			// 记录本次回调尝试的时间线
-			tl = appendTimeline(tl, "callback", cbDur, attempt)
-			trace.Timeline = marshalTimeline(tl)
-			w.store.UpdateTaskTrace(trace)
-
-			lastErr = err
-			if attempt < maxRetries {
-				sleepSec := retryInterval * (1 << (attempt - 1))
-				time.Sleep(time.Duration(sleepSec) * time.Second)
-			}
-			continue
-		}
-
-		respBody, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode >= 200 && resp.StatusCode < 500 && resp.StatusCode != 0 {
-			tl = appendTimeline(tl, "callback", cbDur, attempt)
-			trace.Status = model.TaskStatusCompleted
-			trace.RetryCount = attempt
-			trace.Timeline = marshalTimeline(tl)
-			w.store.UpdateTaskTrace(trace)
-			slog.Info("callback_success", "task_id", trace.TaskID, "linkid", trace.LinkID, "callback_url", trace.CallbackURL, "status", resp.StatusCode, "attempt", fmt.Sprintf("%d/%d", attempt, maxRetries), "resp", ellipsisJSON(string(respBody), 500))
-			return
-		}
-
-		slog.Warn("callback_retry", "task_id", trace.TaskID, "linkid", trace.LinkID, "callback_url", trace.CallbackURL, "status", resp.StatusCode, "attempt", fmt.Sprintf("%d/%d", attempt, maxRetries), "next_in", fmt.Sprintf("%ds", retryInterval*(1<<(attempt-1))))
-		trace.RetryCount = attempt
-		tl = appendTimeline(tl, "callback", cbDur, attempt)
-		trace.Timeline = marshalTimeline(tl)
-		w.store.UpdateTaskTrace(trace)
-		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(respBody))
-		if attempt < maxRetries {
-			sleepSec := retryInterval * (1 << (attempt - 1))
-			time.Sleep(time.Duration(sleepSec) * time.Second)
-		}
-	}
-
-	// 重试耗尽
-	trace.Status = model.TaskStatusCallbackFail
-	trace.RetryCount = maxRetries
-	trace.ErrorMessage = fmt.Sprintf("回调失败（%d次重试耗尽，最后错误: %v）", maxRetries, lastErr)
-	trace.Timeline = marshalTimeline(tl)
-	w.store.UpdateTaskTrace(trace)
-	slog.Error("callback_exhausted", "task_id", trace.TaskID, "linkid", trace.LinkID, "callback_url", trace.CallbackURL, "attempts", maxRetries, "response_body", string(body), "last_error", lastErr)
+	w.store.UpdateTaskTrace(ctx.Trace)
 }
 
-// buildFilesTextAndSummary 构造 files_text（全文+元信息）和 files_summary（轻量摘要）
-func buildFilesTextAndSummary(files *downloadedFiles) ([]model.FileTextItem, []model.FileSummaryItem) {
+// buildFilesTextAndSummary 构造文件全文和摘要
+func buildFilesTextAndSummary(files *model.DownloadResult) ([]model.FileTextItem, []model.FileSummaryItem) {
 	if files == nil || len(files.FlatItems) == 0 {
 		return nil, nil
 	}
@@ -367,7 +211,7 @@ func buildFilesTextAndSummary(files *downloadedFiles) ([]model.FileTextItem, []m
 		ext := filepath.Ext(item.FileName)
 		format := ""
 		if ext != "" {
-			format = ext[1:] // 去掉 .
+			format = ext[1:]
 		}
 
 		textItem := model.FileTextItem{
@@ -400,7 +244,7 @@ func buildFilesTextAndSummary(files *downloadedFiles) ([]model.FileTextItem, []m
 	return texts, summaries
 }
 
-// collectFileErrors 从文件摘要中提取所有失败项，返回「文件名: 原因」列表
+// collectFileErrors 提取文件层失败信息
 func collectFileErrors(summaries []model.FileSummaryItem) []string {
 	var errs []string
 	for _, s := range summaries {
@@ -418,4 +262,21 @@ func collectFileErrors(summaries []model.FileSummaryItem) []string {
 		errs = append(errs, name+": "+reason)
 	}
 	return errs
+}
+
+// nowISO 返回当前 ISO8601 时间
+func nowISO() string {
+	return time.Now().Format("2006-01-02T15:04:05.000-07:00")
+}
+
+// mustJSON 序列化 JSON，失败返回 "{}"
+func mustJSON(v interface{}) string {
+	if v == nil {
+		return "{}"
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }

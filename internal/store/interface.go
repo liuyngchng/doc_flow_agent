@@ -28,7 +28,7 @@ type MetaStore interface {
 	DeleteLLMConfig(id int64) error
 	SetDefaultLLMConfig(id int64) error
 
-	// --- 接口配置 ---
+	// --- 接口配置（保留向后兼容）---
 	ListInterfaces() ([]model.InterfaceConfig, error)
 	GetInterfaceByID(id int64) (*model.InterfaceConfig, error)
 	GetInterfaceByPath(path string) (*model.InterfaceConfig, error)
@@ -36,6 +36,15 @@ type MetaStore interface {
 	UpdateInterface(iface *model.InterfaceConfig) error
 	DeleteInterface(id int64) error
 	IncrementInterfaceVersion(id int64) error
+
+	// --- 提示词模板 ---
+	ListTemplates() ([]model.TemplateConfig, error)
+	GetTemplateByID(id int64) (*model.TemplateConfig, error)
+	GetTemplateByPath(interfacePath string) (*model.TemplateConfig, error)
+	CreateTemplate(tmpl *model.TemplateConfig) error
+	UpdateTemplate(tmpl *model.TemplateConfig) error
+	DeleteTemplate(id int64) error
+	IncrementTemplateVersion(id int64) error
 
 	// --- 文件记录 ---
 	CreateFileRecord(record *model.FileRecord) error

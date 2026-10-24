@@ -35,10 +35,11 @@ CREATE TABLE IF NOT EXISTS llm_configs (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- agent_interfaces 为旧版接口配置表（逐步废弃，保留向后兼容）
 CREATE TABLE IF NOT EXISTS agent_interfaces (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,                 -- 接口名称，如 "收文类型判断"
-    path TEXT UNIQUE NOT NULL,          -- 接口路径，如 "receive-type"
+    name TEXT NOT NULL,                 -- 接口名称
+    path TEXT UNIQUE NOT NULL,          -- 接口路径
     description TEXT DEFAULT '',
     prompt_template TEXT NOT NULL,      -- 提示词模板，含 {{占位符}}
     input_params TEXT DEFAULT '[]',     -- JSON 参数定义
@@ -50,6 +51,26 @@ CREATE TABLE IF NOT EXISTS agent_interfaces (
     version INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (llm_config_id) REFERENCES llm_configs(id)
+);
+
+-- agent_templates 为新的提示词模板表（替代 agent_interfaces 的页面功能）
+-- 页面上创建模板时必须关联一个接口路径（interface_path），
+-- 接口路径由代码硬编码（见 internal/interfaces/registry.go）
+CREATE TABLE IF NOT EXISTS agent_templates (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,        -- 模板标题，如"区分公文类型"
+    interface_path  TEXT NOT NULL DEFAULT '', -- 关联的接口路径，如 document/classify
+    description     TEXT DEFAULT '',      -- 用途说明
+    prompt_template TEXT NOT NULL,        -- 提示词内容，含 {{占位符}}
+    output_schema   TEXT DEFAULT '{}',    -- 输出 JSON Schema
+    llm_config_id   INTEGER,             -- 关联的 LLM 模型配置
+    temperature     REAL,                -- 可为 NULL（用默认值）
+    max_tokens      INTEGER,
+    enabled         INTEGER DEFAULT 1,
+    version         INTEGER DEFAULT 1,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (llm_config_id) REFERENCES llm_configs(id)
 );
 
