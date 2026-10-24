@@ -203,8 +203,9 @@ func main() {
 	// 电子公文工作流调用接口（支持 X-Api-Key 或 Bearer token）
 	r.POST("/api/v1/*interfacePath", h.Auth.APITokenMiddleware(), handler.CallLogMiddleware(metaStore), h.Call.Call)
 
-	// 开发调试：接收 POST JSON 请求，仅打印不做任何处理
-	r.POST("/api/v1/dev/null", func(c *gin.Context) {
+	// 审稿模拟回调（rdCLI 核稿完成后主动推送，无需认证）
+	r.POST("/api/inner/proofread/callback", h.Proofread.Callback)
+	r.POST("/api/dev/null", func(c *gin.Context) {
 		var body map[string]interface{}
 		if err := c.ShouldBindJSON(&body); err == nil {
 			slog.Info("dev_null_received", "body", body)

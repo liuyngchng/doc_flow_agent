@@ -27,7 +27,7 @@ var proofreadAllowedExts = map[string]bool{
 	".xlsx": true,
 }
 
-// ProofreadHandler 审稿模拟处理器（代理外部 rdCLI 审稿服务）
+// ProofreadHandler 审稿模拟处理器（代理外部 rdCLI 审稿服务，通过回调接收结果）
 type ProofreadHandler struct {
 	cfg   *model.Config
 	store store.MetaStore
@@ -38,47 +38,7 @@ func NewProofreadHandler(cfg *model.Config, st store.MetaStore) *ProofreadHandle
 	return &ProofreadHandler{cfg: cfg, store: st}
 }
 
-// submitInternal 提交审稿任务到外部 rdCLI（内部复用）
-func (h *ProofreadHandler) submitInternal(baseURL, apiKey string, src io.Reader, filename string, instructions string) (*http.Response, error) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	part, err := writer.CreateFormFile("file", filename)
-	if err != nil {
-		return nil, fmt.Errorf("构建请求失败: %w", err)
-	}
-	if _, err := io.Copy(part, src); err != nil {
-		return nil, fmt.Errorf("读取文件数据失败: %w", err)
-	}
-	if instructions != "" {
-		writer.WriteField("additional_instructions", instructions)
-	}
-	writer.Close()
-
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/proofread", &body)
-	if err != nil {
-		return nil, fmt.Errorf("创建代理请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	if apiKey != "" {
-		req.Header.Set("x-api-key", apiKey)
-	}
-
-	return docParserClient.Do(req)
-}
-
-// queryInternal 查询审稿结果（内部复用）
-func (h *ProofreadHandler) queryInternal(baseURL, apiKey, taskID string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/api/proofread/"+taskID, nil)
-	if err != nil {
-		return nil, fmt.Errorf("创建代理请求失败: %w", err)
-	}
-	if apiKey != "" {
-		req.Header.Set("x-api-key", apiKey)
-	}
-	return docParserClient.Do(req)
-}
-
-// Submit 提交审稿任务 — 代理 multipart 到外部 rdCLI
+// Submit 提交审稿任务到外部 rdCLI，附带回调地址
 // POST /api/inner/proofread/submit
 func (h *ProofreadHandler) Submit(c *gin.Context) {
 	file, err := c.FormFile("file")
@@ -105,6 +65,13 @@ func (h *ProofreadHandler) Submit(c *gin.Context) {
 		return
 	}
 
+	// 构造回调地址
+	callbackURL := h.buildCallbackURL()
+	if callbackURL == "" {
+		c.JSON(400, gin.H{"status": "error", "error": "未配置 self_url，请在 cfg.yml 中设置 sys.self_url"})
+		return
+	}
+
 	// 打开上传文件
 	src, err := file.Open()
 	if err != nil {
@@ -115,7 +82,35 @@ func (h *ProofreadHandler) Submit(c *gin.Context) {
 
 	instructions := strings.TrimSpace(c.PostForm("additional_instructions"))
 
-	resp, err := h.submitInternal(baseURL, apiKey, src, file.Filename, instructions)
+	// 构造 multipart 请求到 rdCLI（附带 callback_url）
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", file.Filename)
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "error": "构建请求失败"})
+		return
+	}
+	if _, err := io.Copy(part, src); err != nil {
+		c.JSON(500, gin.H{"status": "error", "error": "读取文件数据失败"})
+		return
+	}
+	writer.WriteField("callback_url", callbackURL)
+	if instructions != "" {
+		writer.WriteField("additional_instructions", instructions)
+	}
+	writer.Close()
+
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/proofread", &body)
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "error": "创建代理请求失败"})
+		return
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if apiKey != "" {
+		req.Header.Set("x-api-key", apiKey)
+	}
+
+	resp, err := docParserClient.Do(req)
 	if err != nil {
 		slog.Error("proofread_submit_failed", "user", userName(c), "error", err)
 		c.JSON(502, gin.H{"status": "error", "error": "审稿服务请求失败: " + err.Error()})
@@ -129,15 +124,73 @@ func (h *ProofreadHandler) Submit(c *gin.Context) {
 		return
 	}
 
-	// 从 rdCLI 响应中提取 task_id 并持久化
-	h.persistFromSubmit(respBody)
+	slog.Info("proofread_submit", "user", userName(c), "filename", file.Filename, "ext", ext, "status", resp.StatusCode, "callback_url", callbackURL)
 
-	slog.Info("proofread_submit", "user", userName(c), "filename", file.Filename, "ext", ext, "status", resp.StatusCode)
+	// 从 rdCLI 响应中提取 task_id 并持久化
+	if resp.StatusCode == 200 {
+		var parsed struct {
+			Success bool `json:"success"`
+			Data    struct {
+				TaskID string `json:"task_id"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(respBody, &parsed) == nil && parsed.Success && parsed.Data.TaskID != "" {
+			h.store.SetConfig("proofread_current_task_id", parsed.Data.TaskID, "审稿任务 ID")
+			h.store.SetConfig("proofread_current_status", "pending", "审稿任务状态")
+			h.store.SetConfig("proofread_current_file_name", file.Filename, "审稿文件名")
+			h.store.SetConfig("proofread_current_result", "", "审稿结果（等待回调）")
+		}
+	}
 
 	c.Data(resp.StatusCode, "application/json", respBody)
 }
 
-// Query 查询审稿结果 — 代理 GET 到外部 rdCLI，并更新持久化状态
+// Callback 接收 rdCLI 核稿完成后的回调推送
+// POST /api/inner/proofread/callback
+// 此接口由 rdCLI 调用，不需要 Cookie 认证
+func (h *ProofreadHandler) Callback(c *gin.Context) {
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		slog.Warn("proofread_callback_read_failed", "error", err)
+		c.JSON(400, gin.H{"status": "error", "error": "读取请求体失败"})
+		return
+	}
+
+	slog.Info("proofread_callback_received", "body", ellipsisJSON(string(bodyBytes), 2000))
+
+	// 解析回调内容
+	var parsed struct {
+		TaskID   string `json:"task_id"`
+		Status   string `json:"status"`
+		FileName string `json:"file_name"`
+	}
+	if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
+		slog.Warn("proofread_callback_parse_failed", "error", err)
+		c.JSON(400, gin.H{"status": "error", "error": "请求体不是合法 JSON"})
+		return
+	}
+
+	if parsed.TaskID == "" {
+		c.JSON(400, gin.H{"status": "error", "error": "缺少 task_id"})
+		return
+	}
+
+	// 持久化结果
+	h.store.SetConfig("proofread_current_task_id", parsed.TaskID, "审稿任务 ID")
+	h.store.SetConfig("proofread_current_status", parsed.Status, "审稿任务状态")
+	h.store.SetConfig("proofread_current_result", string(bodyBytes), "审稿结果 JSON")
+
+	if parsed.FileName != "" {
+		h.store.SetConfig("proofread_current_file_name", parsed.FileName, "审稿文件名")
+	}
+
+	slog.Info("proofread_callback_stored", "task_id", parsed.TaskID, "status", parsed.Status)
+
+	// 返回 200 确认接收（rdCLI 要求 2xx）
+	c.JSON(200, gin.H{"status": "ok"})
+}
+
+// Query 查询审稿结果 — 从本地 DB 读取
 // GET /api/inner/proofread/query/:task_id
 func (h *ProofreadHandler) Query(c *gin.Context) {
 	taskID := c.Param("task_id")
@@ -146,45 +199,53 @@ func (h *ProofreadHandler) Query(c *gin.Context) {
 		return
 	}
 
-	baseURL, apiKey, err := h.getProofreadConfig()
-	if err != nil {
-		c.JSON(400, gin.H{"status": "error", "error": err.Error()})
+	// 校验 task_id 是否匹配当前存储的任务
+	storedTaskID, _ := h.store.GetConfig("proofread_current_task_id")
+	if storedTaskID != taskID {
+		c.JSON(404, gin.H{"status": "error", "error": "任务不存在或已过期"})
 		return
 	}
 
-	resp, err := h.queryInternal(baseURL, apiKey, taskID)
-	if err != nil {
-		slog.Error("proofread_query_failed", "user", userName(c), "task_id", taskID, "error", err)
-		c.JSON(502, gin.H{"status": "error", "error": "审稿服务请求失败: " + err.Error()})
+	result, _ := h.store.GetConfig("proofread_current_result")
+
+	if result == "" {
+		// 还没有收到回调，返回进行中状态
+		status, _ := h.store.GetConfig("proofread_current_status")
+		fileName, _ := h.store.GetConfig("proofread_current_file_name")
+		c.JSON(200, gin.H{
+			"success": true,
+			"data": gin.H{
+				"task_id":   taskID,
+				"status":    status,
+				"file_name": fileName,
+			},
+		})
 		return
 	}
-	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(502, gin.H{"status": "error", "error": "读取审稿服务响应失败"})
+	// 已经有回调结果，直接返回
+	var resultJSON interface{}
+	if err := json.Unmarshal([]byte(result), &resultJSON); err != nil {
+		c.JSON(500, gin.H{"status": "error", "error": "结果数据损坏"})
 		return
 	}
 
-	// 更新持久化状态
-	h.persistFromQuery(taskID, respBody)
-
-	slog.Info("proofread_query", "user", userName(c), "task_id", taskID, "status", resp.StatusCode)
-
-	c.Data(resp.StatusCode, "application/json", respBody)
+	c.JSON(200, gin.H{"success": true, "data": resultJSON})
 }
 
-// State 返回当前审稿任务状态（页面刷新后恢复用）
+// State 返回当前审稿任务状态（页面加载后恢复用）
 // GET /api/inner/proofread/state
 func (h *ProofreadHandler) State(c *gin.Context) {
 	taskID, _ := h.store.GetConfig("proofread_current_task_id")
 	status, _ := h.store.GetConfig("proofread_current_status")
+	fileName, _ := h.store.GetConfig("proofread_current_file_name")
 
 	c.JSON(200, gin.H{
 		"status": "ok",
 		"data": gin.H{
-			"task_id": taskID,
-			"status":  status,
+			"task_id":   taskID,
+			"status":    status,
+			"file_name": fileName,
 		},
 	})
 }
@@ -198,42 +259,11 @@ func (h *ProofreadHandler) getProofreadConfig() (string, string, error) {
 	return baseURL, h.cfg.DocAudit.Token, nil
 }
 
-// persistFromSubmit 从 rdCLI 提交响应中提取 task_id 并持久化
-func (h *ProofreadHandler) persistFromSubmit(respBody []byte) {
-	var parsed struct {
-		Success bool `json:"success"`
-		Data    struct {
-			TaskID string `json:"task_id"`
-		} `json:"data"`
+// buildCallbackURL 构造 rdCLI 回调地址
+func (h *ProofreadHandler) buildCallbackURL() string {
+	selfURL := strings.TrimRight(h.cfg.Sys.SelfURL, "/")
+	if selfURL == "" {
+		return ""
 	}
-	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return
-	}
-	if parsed.Success && parsed.Data.TaskID != "" {
-		h.store.SetConfig("proofread_current_task_id", parsed.Data.TaskID, "审稿模拟当前任务 ID")
-		h.store.SetConfig("proofread_current_status", "pending", "审稿模拟当前任务状态")
-	}
-}
-
-// persistFromQuery 从 rdCLI 查询响应中提取状态并持久化
-func (h *ProofreadHandler) persistFromQuery(taskID string, respBody []byte) {
-	var parsed struct {
-		Success bool `json:"success"`
-		Data    struct {
-			Status string `json:"status"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return
-	}
-	if !parsed.Success {
-		return
-	}
-	status := parsed.Data.Status
-	if status == "" {
-		return
-	}
-	// 持久化 task_id（以防万一）和状态
-	h.store.SetConfig("proofread_current_task_id", taskID, "审稿模拟当前任务 ID")
-	h.store.SetConfig("proofread_current_status", status, "审稿模拟当前任务状态")
+	return selfURL + "/api/inner/proofread/callback"
 }

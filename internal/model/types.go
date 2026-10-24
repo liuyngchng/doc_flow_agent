@@ -80,6 +80,7 @@ type ServerConfig struct {
 type SysConfig struct {
 	Name                  string `yaml:"name"`
 	BasePath              string `yaml:"base_path"`
+	SelfURL               string `yaml:"self_url"`                      // 本服务对外可访问地址（如 http://192.168.1.100:20001），用于构造 rdCLI 回调地址
 	CallbackToken         string `yaml:"callback_url_token"`          // 回调 Bearer 认证 token
 	MaxConcurrentTasks    int    `yaml:"max_concurrent_tasks"`        // Worker 数，默认 5
 	MaxPendingTasks       int    `yaml:"max_pending_tasks"`           // 任务总数上限，默认 10

@@ -568,16 +568,20 @@ async function deleteUser(name) {
 }
 
 // ============================================================
-// 审稿模拟
+// 审稿模拟（rdCLI 回调模式 — 不轮询）
 // ============================================================
-var prPollTimer = null;
 var prAllowedExts = ['.docx', '.doc', '.pdf', '.txt', '.md', '.xlsx'];
 var prCurrentTaskId = '';
 var prCurrentStatus = '';
 
+function prFileExt(fileName) {
+    var i = fileName.lastIndexOf('.');
+    if (i < 0) return '';
+    return fileName.slice(i).toLowerCase();
+}
+
 async function loadProofreadConfig() {
     // doc_audit 配置已移至 cfg.yml，无需从 API 加载界面配置
-    // 恢复上次的审稿任务状态
     restoreProofreadState();
 }
 
@@ -590,20 +594,13 @@ async function restoreProofreadState() {
         if (data.task_id) {
             prSetTaskId(data.task_id);
             prCurrentStatus = data.status || '';
-            document.getElementById('prResult').textContent = '（恢复上一任务 ' + data.task_id + '）';
-            // 如果上次任务还在进行中，自动恢复轮询
             if (prCurrentStatus === 'pending' || prCurrentStatus === 'processing') {
-                if (prPollTimer) clearTimeout(prPollTimer);
-                prPollTimer = setTimeout(function() { proofreadQuery(true); }, 2000);
+                document.getElementById('prResult').textContent = '（上一任务 ' + data.task_id + ' 状态: ' + prCurrentStatus + '，请手动点击查询）';
+            } else {
+                document.getElementById('prResult').textContent = '（上一任务 ' + data.task_id + ' 已完成，点击查询查看结果）';
             }
         }
     } catch (_) {}
-}
-
-async function restoreProofreadState() {
-    var i = fileName.lastIndexOf('.');
-    if (i < 0) return '';
-    return fileName.slice(i).toLowerCase();
 }
 
 function prSetTaskId(taskId) {
@@ -623,7 +620,7 @@ async function proofreadSubmit() {
         return;
     }
 
-    // 已有未完成的审稿任务时提醒，确认则覆盖
+    // 已有未完成的审稿任务时提醒
     if (prCurrentTaskId && (prCurrentStatus === 'pending' || prCurrentStatus === 'processing')) {
         var ok = confirm('当前任务 ' + prCurrentTaskId + ' 尚未完成审稿，重新提交将覆盖它。是否继续？');
         if (!ok) return;
@@ -651,16 +648,15 @@ async function proofreadSubmit() {
             prSetTaskId(json.data.task_id);
             prCurrentStatus = 'pending';
             fileInput.value = '';
-            // 提交成功后自动开始轮询
-            if (prPollTimer) clearTimeout(prPollTimer);
-            prPollTimer = setTimeout(function() { proofreadQuery(true); }, 15000);
+            // 不轮询，等对方回调完成即可
+            document.getElementById('prResult').textContent = result + '\n\n--- 耗时: ' + elapsed + 'ms ---\n\n>>> 任务已提交，等待 rdCLI 核稿完成后主动推送结果。请稍后点击「查询」按钮查看结果。<<<';
         }
     } catch (err) {
         document.getElementById('prResult').textContent = '提交失败: ' + err.message;
     }
 }
 
-async function proofreadQuery(auto) {
+async function proofreadQuery() {
     var taskId = prCurrentTaskId;
     if (!taskId) { toast('请先提交文档', 'error'); return; }
 
@@ -674,17 +670,8 @@ async function proofreadQuery(auto) {
         var result = JSON.stringify(json, null, 2);
         document.getElementById('prResult').textContent = result + '\n\n--- 耗时: ' + elapsed + 'ms ---';
 
-        // 自动轮询：processing/pending 状态 15 秒后再查
         if (json.success && json.data) {
             prCurrentStatus = json.data.status || '';
-            var status = prCurrentStatus;
-            if (auto && (status === 'pending' || status === 'processing')) {
-                document.getElementById('prResult').textContent = result + '\n\n>>> 15 秒后自动查询... <<<';
-                if (prPollTimer) clearTimeout(prPollTimer);
-                prPollTimer = setTimeout(function() { proofreadQuery(true); }, 15000);
-            } else {
-                if (prPollTimer) clearTimeout(prPollTimer);
-            }
         }
     } catch (err) {
         document.getElementById('prResult').textContent = '查询失败: ' + err.message;

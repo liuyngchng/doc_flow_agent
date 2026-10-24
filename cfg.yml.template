@@ -10,6 +10,7 @@ server:
 sys:
   name: "doc_flow_agent"             # 应用名称
   base_path: ""             # 文件存储基础路径，留空用 data/
+  self_url: ""              # 本服务对外可访问地址（如 http://192.168.1.104:20001），用于构造 rdCLI 回调地址
   callback_url_token: ""             # 回调 Bearer 认证 token（对方私下提供）
   max_concurrent_tasks: 5            # Worker 数量 = 同时调用 LLM 的任务数
   max_pending_tasks: 10              # 任务总数上限（处理中 + 排队），超过后拒单
