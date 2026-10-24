@@ -218,7 +218,20 @@ func (h *ProofreadHandler) Query(c *gin.Context) {
 
 	// 校验 task_id 是否匹配当前存储的任务
 	storedTaskID, _ := h.store.GetConfig("proofread_current_task_id")
+
+	slog.Info("proofread_query",
+		"user", userName(c),
+		"query_task_id", taskID,
+		"stored_task_id", storedTaskID,
+		"match", storedTaskID == taskID,
+	)
+
 	if storedTaskID != taskID {
+		slog.Warn("proofread_query_task_mismatch",
+			"user", userName(c),
+			"query_task_id", taskID,
+			"stored_task_id", storedTaskID,
+		)
 		c.JSON(404, gin.H{"status": "error", "error": "任务不存在或已过期"})
 		return
 	}
@@ -229,6 +242,14 @@ func (h *ProofreadHandler) Query(c *gin.Context) {
 		// 还没有收到回调，返回进行中状态
 		status, _ := h.store.GetConfig("proofread_current_status")
 		fileName, _ := h.store.GetConfig("proofread_current_file_name")
+
+		slog.Info("proofread_query_no_result_yet",
+			"user", userName(c),
+			"task_id", taskID,
+			"status", status,
+			"file_name", fileName,
+		)
+
 		c.JSON(200, gin.H{
 			"success": true,
 			"data": gin.H{
@@ -243,9 +264,19 @@ func (h *ProofreadHandler) Query(c *gin.Context) {
 	// 已经有回调结果，直接返回
 	var resultJSON interface{}
 	if err := json.Unmarshal([]byte(result), &resultJSON); err != nil {
+		slog.Error("proofread_query_result_corrupted",
+			"user", userName(c),
+			"task_id", taskID,
+			"error", err,
+		)
 		c.JSON(500, gin.H{"status": "error", "error": "结果数据损坏"})
 		return
 	}
+
+	slog.Info("proofread_query_result",
+		"user", userName(c),
+		"task_id", taskID,
+	)
 
 	c.JSON(200, gin.H{"success": true, "data": resultJSON})
 }
