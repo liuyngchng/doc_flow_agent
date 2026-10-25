@@ -2,7 +2,7 @@
 # Production Docker image for doc_flow_agent.
 #
 # 只打包预编译的二进制，不编译。
-# 先构建二进制 (scripts/build.sh)，再用此文件构建镜像。
+# 先构建二进制 (build/build.sh)，再用此文件构建镜像。
 #
 # Run:
 #   docker run -d --rm --name doc_flow_agent -p 20001:20001 \

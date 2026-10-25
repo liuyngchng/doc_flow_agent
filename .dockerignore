@@ -6,15 +6,18 @@
 .git
 .gitignore
 
-# Go 编译缓存（编译镜像 COPY build/deps/go*.tar.gz，需保留 deps）
-build/gocache
-build/gomodcache
+# Go 编译缓存（编译镜像 COPY dist/cache/deps/go*.tar.gz，需保留 deps）
+dist/cache/gocache
+dist/cache/gomodcache
 
 # 编译产物（Dockerfile.server 需 dist/doc_flow_agent + 证书，其余排除）
 dist/*
 !dist/doc_flow_agent
 !dist/cert.pem
 !dist/key.pem
+!dist/cache
+!dist/cache/deps
+!dist/cache/deps/*
 
 # 运行时数据（不进入镜像）
 data

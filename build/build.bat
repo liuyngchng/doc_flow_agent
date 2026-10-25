@@ -73,7 +73,7 @@ copy /Y "%ROOT_DIR%cfg.yml.template" "%PKG_DIR%\cfg.yml" >nul
 
 :: Copy Chinese README (separate file avoids encoding issues in batch)
 echo   Copying README...
-copy /Y "%ROOT_DIR%scripts\windows-readme.txt" "%PKG_DIR%\README.txt" >nul
+copy /Y "%ROOT_DIR%build\windows-readme.txt" "%PKG_DIR%\README.txt" >nul
 
 :: Package as zip
 set "ZIP_NAME=%ROOT_DIR%dist\doc_flow_agent-windows-amd64.zip"

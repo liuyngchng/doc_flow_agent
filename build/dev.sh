@@ -11,7 +11,7 @@ IMAGE="doc_flow_agent-build:latest"
 
 ensure_go_tarball() {
   GO_VERSION="1.24.13"
-  GO_TARBALL="$SCRIPT_DIR/build/deps/go${GO_VERSION}.linux-amd64.tar.gz"
+  GO_TARBALL="$SCRIPT_DIR/dist/cache/deps/go${GO_VERSION}.linux-amd64.tar.gz"
   if [[ -f "$GO_TARBALL" ]]; then
     return 0
   fi
@@ -34,13 +34,13 @@ ensure_go_tarball
 if ! docker image inspect "$IMAGE" &>/dev/null; then
     echo "Building dev image $IMAGE ..."
     GO_VERSION="1.24.13"
-    docker build --build-arg "GO_VERSION=$GO_VERSION" -t "$IMAGE" -f scripts/Dockerfile .
+    docker build --build-arg "GO_VERSION=$GO_VERSION" -t "$IMAGE" -f build/Dockerfile .
     echo "Done."
 fi
 
 # Go 模块缓存
-GOCACHE_DIR="$SCRIPT_DIR/build/gocache"
-GOMODCACHE_DIR="$SCRIPT_DIR/build/gomodcache"
+GOCACHE_DIR="$SCRIPT_DIR/dist/cache/gocache"
+GOMODCACHE_DIR="$SCRIPT_DIR/dist/cache/gomodcache"
 mkdir -p "$GOCACHE_DIR" "$GOMODCACHE_DIR"
 
 echo ""

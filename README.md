@@ -32,7 +32,7 @@
 ### Windows
 
 ```bash
-scripts/build.bat          # 一键编译
+build/build.bat          # 一键编译
 cd dist/doc_flow_agent-windows-amd64
 doc_flow_agent.exe         # 双击运行
 ```
@@ -45,9 +45,9 @@ doc_flow_agent.exe         # 双击运行
 ### Linux / Docker
 
 ```bash
-scripts/build.sh               # 编译 + 构建 Docker 镜像
-scripts/deploy.sh start        # 启动容器（自动创建 llm_net 网络）
-scripts/deploy.sh logs         # 查看运行日志
+build/build.sh               # 编译 + 构建 Docker 镜像
+build/deploy.sh start        # 启动容器（自动创建 llm_net 网络）
+build/deploy.sh logs         # 查看运行日志
 ```
 
 `deploy.sh` 支持 `start` / `stop` / `restart` / `logs`，可通过环境变量 `CONTAINER`、`HOST_PORT`、`DATA_DIR` 覆盖默认值。容器加入 `llm_net` 虚拟网桥后，可通过容器名访问同网络内的其他服务（如 `doc_parser.url = "http://doc-parser:9090/parse"`）。
@@ -279,12 +279,12 @@ doc_flow_agent/
 ├── web/                       # 内嵌 Web 资源
 │   ├── templates/             # HTML 模板
 │   └── static/                # CSS/JS
-├── scripts/                   # 编译/部署脚本
+├── build/                    # 编译/部署脚本
 │   ├── build.sh               # Linux 编译 + Docker 镜像
 │   ├── build.bat              # Windows 编译
 │   ├── deploy.sh              # 容器启动/停止/重启
 │   ├── dev.sh                 # 开发容器
 │   ├── Dockerfile             # 编译镜像
 │   └── Dockerfile.server      # 生产镜像
-└── dist/                      # 编译产物
+└── dist/                      # 编译产物（cache/ 为 Go 编译缓存）
 ```

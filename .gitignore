@@ -1,6 +1,5 @@
 # 编译产物
 dist/
-build/
 *.exe
 *.test
 *.out
@@ -35,3 +34,5 @@ Thumbs.db
 tmp/
 .claude
 **/*.tar
+__debug_bin
+.env

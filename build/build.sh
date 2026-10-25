@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ================================================================
 # build.sh - 一键编译脚本 (Linux)
-#   ./scripts/build.sh            # 编译 Linux 二进制 (Docker)
-#   ./scripts/build.sh local      # 编译 Linux 二进制 (本地 Go)
-#   ./scripts/build.sh windows    # 交叉编译 Windows .exe
-#   ./scripts/build.sh docker     # 构建 Docker 生产镜像
+#   ./build/build.sh            # 编译 Linux 二进制 (Docker)
+#   ./build/build.sh local      # 编译 Linux 二进制 (本地 Go)
+#   ./build/build.sh windows    # 交叉编译 Windows .exe
+#   ./build/build.sh docker     # 构建 Docker 生产镜像
 #
 # 代理参数（可选，不带 = 时继承环境变量）:
 #   http_proxy=<url>        设置 HTTP 代理
@@ -12,7 +12,7 @@
 #   no_proxy=<url>          设置不走代理的地址列表
 #
 # 示例:
-#   ./scripts/build.sh windows http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890
+#   ./build/build.sh windows http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890
 # ================================================================
 set -euo pipefail
 
@@ -24,7 +24,7 @@ IMAGE="doc_flow_agent-build:latest"
 # ── Usage ───────────────────────────────────────────────────────
 usage() {
   cat <<'EOF'
-用法: ./scripts/build.sh [模式] [代理参数...]
+用法: ./build/build.sh [模式] [代理参数...]
 
 模式:
   (默认)                  编译 Linux 二进制 (Docker)
@@ -39,8 +39,8 @@ usage() {
   no_proxy=<url>          设置不走代理的地址列表
 
 示例:
-  ./scripts/build.sh windows
-  ./scripts/build.sh windows http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890
+  ./build/build.sh windows
+  ./build/build.sh windows http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890
 EOF
 }
 
@@ -116,7 +116,7 @@ ensure_cert() {
 # Go toolchain (host-cached tarball, used by all Docker builds)
 # ================================================================
 GO_VERSION="1.24.13"
-GO_TARBALL="$SCRIPT_DIR/build/deps/go${GO_VERSION}.linux-amd64.tar.gz"
+GO_TARBALL="$SCRIPT_DIR/dist/cache/deps/go${GO_VERSION}.linux-amd64.tar.gz"
 GO_DOWNLOAD_URL="https://golang.google.cn/dl/go${GO_VERSION}.linux-amd64.tar.gz"
 
 ensure_go_tarball() {
@@ -155,7 +155,7 @@ build_windows() {
 
     cp dist/doc_flow_agent.exe "$pkg/"
     cp cfg.yml.template "$pkg/cfg.yml"
-    cp scripts/windows-readme.txt "$pkg/README.txt"
+    cp build/windows-readme.txt "$pkg/README.txt"
 
     # 打包 zip
     cd dist && rm -f doc_flow_agent-windows-amd64.zip && \
@@ -188,7 +188,7 @@ build_linux_local() {
 
     cp dist/doc_flow_agent "$pkg/"
     cp cfg.yml.template "$pkg/cfg.yml"
-    cp scripts/windows-readme.txt "$pkg/README.txt"
+    cp build/windows-readme.txt "$pkg/README.txt"
 
     # 打包 tar
     tar -cf "dist/doc_flow_agent-linux-amd64.tar" -C dist "doc_flow_agent-linux-amd64"
@@ -212,13 +212,13 @@ build_linux_docker() {
         echo "=== Building build image $IMAGE ==="
         docker build "${DOCKER_BUILD_ARGS[@]+"${DOCKER_BUILD_ARGS[@]}"}" \
             --build-arg "GO_VERSION=$GO_VERSION" \
-            -t "$IMAGE" -f scripts/Dockerfile .
+            -t "$IMAGE" -f build/Dockerfile .
         echo "Done."
     fi
 
     # Go 模块缓存目录（映射到宿主机，加速后续编译）
-    local gocache="$SCRIPT_DIR/build/gocache"
-    local gomodcache="$SCRIPT_DIR/build/gomodcache"
+    local gocache="$SCRIPT_DIR/dist/cache/gocache"
+    local gomodcache="$SCRIPT_DIR/dist/cache/gomodcache"
     mkdir -p "$gocache" "$gomodcache" dist
 
     echo ""
@@ -245,14 +245,17 @@ build_linux_docker() {
     echo ""
     echo "=== Building production Docker image doc_flow_agent:latest ==="
     docker build "${DOCKER_BUILD_ARGS[@]+"${DOCKER_BUILD_ARGS[@]}"}" \
-        -t doc_flow_agent:latest -f scripts/Dockerfile.server .
+        -t doc_flow_agent:latest -f build/Dockerfile.server .
 
     echo ""
     echo "=== Done ==="
     echo "  Docker image: doc_flow_agent:latest"
     echo "  Run with:"
     echo "    # data/ 包含数据库 cfg.db、上传文件、日志，容器停后数据不丢"
+    echo "    # 加入 llm_net 虚拟网桥，可通过容器名访问同网络内其他服务"
     echo "    docker run -d --rm --name doc_flow_agent -p 20001:20001 \\"
+    echo "      --network llm_net \\"
+    echo "      --security-opt seccomp=unconfined \\"
     echo "      -v \$(pwd)/data:/app/data \\"
     echo "      doc_flow_agent:latest"
     echo "    # 查看运行日志"
