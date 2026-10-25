@@ -14,8 +14,8 @@ type InterfaceDefinition struct {
 	Description string
 
 	// 可选钩子
-	PreProcess  func(ctx *TaskContext) error // 在 download 之前
-	PostProcess func(ctx *TaskContext) error // 在 LLM 之后、callback 之前
+	PreProcess  func(ctx *TaskContext) error `json:"-"` // 在 download 之前
+	PostProcess func(ctx *TaskContext) error `json:"-"` // 在 LLM 之后、callback 之前
 }
 
 // TimelineRecorder 时间线记录器

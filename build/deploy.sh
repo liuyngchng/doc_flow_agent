@@ -88,6 +88,9 @@ start() {
   echo ""
   echo "  查看日志: ./build/deploy.sh logs"
   echo "  停止容器: ./build/deploy.sh stop"
+
+  # 部署完成后自动跟踪日志
+  logs
 }
 
 # ── 停止 ──────────────────────────────────────────────────────────
