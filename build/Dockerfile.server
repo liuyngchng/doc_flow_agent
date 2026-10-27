@@ -4,18 +4,21 @@
 # 只打包预编译的二进制，不编译。
 # 先构建二进制 (build/build.sh)，再用此文件构建镜像。
 #
+# 多阶段构建：代理仅在中间 deps 阶段临时使用，最终镜像
+# 不包含任何 ARG / http_proxy / https_proxy 残留。
+#
 # Run:
 #   docker run -d --rm --name doc_flow_agent -p 20001:20001 \
 #     -v $(pwd)/data:/app/data \
 #     doc_flow_agent:latest
 # ================================================================
-FROM ubuntu:24.04
+
+# ── Stage 1: deps ── 下载并安装运行时依赖，代理只在这一层 ──────
+FROM ubuntu:24.04 AS deps
 
 ARG HTTP_PROXY=""
 ARG HTTPS_PROXY=""
 ARG NO_PROXY=""
-ENV HTTP_PROXY="$HTTP_PROXY" HTTPS_PROXY="$HTTPS_PROXY" NO_PROXY="$NO_PROXY" \
-    http_proxy="$HTTP_PROXY" https_proxy="$HTTPS_PROXY" no_proxy="$NO_PROXY"
 
 RUN if [ -n "$HTTP_PROXY" ]; then \
         echo "Acquire::http::Proxy \"$HTTP_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
@@ -24,11 +27,23 @@ RUN if [ -n "$HTTP_PROXY" ]; then \
         echo "Acquire::https::Proxy \"$HTTPS_PROXY\";" >> /etc/apt/apt.conf.d/01proxy; \
     fi
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN export HTTP_PROXY="$HTTP_PROXY" HTTPS_PROXY="$HTTPS_PROXY" NO_PROXY="$NO_PROXY" \
+        http_proxy="$HTTP_PROXY" https_proxy="$HTTPS_PROXY" no_proxy="$NO_PROXY"; \
+    apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/01proxy
 
+# ── Stage 2: runtime ── 干净的最终镜像，无任何代理痕迹 ───────────
+FROM ubuntu:24.04
+
+# 运行时依赖：CA 证书 + 时区数据
+COPY --from=deps /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=deps /usr/share/ca-certificates /usr/share/ca-certificates
+COPY --from=deps /usr/share/zoneinfo /usr/share/zoneinfo
+
 ENV TZ=Asia/Shanghai
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone
 
 WORKDIR /app
 

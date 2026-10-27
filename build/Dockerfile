@@ -12,9 +12,8 @@ FROM ubuntu:24.04
 ARG HTTP_PROXY=""
 ARG HTTPS_PROXY=""
 ARG NO_PROXY=""
-ENV HTTP_PROXY="$HTTP_PROXY" HTTPS_PROXY="$HTTPS_PROXY" NO_PROXY="$NO_PROXY" \
-    http_proxy="$HTTP_PROXY" https_proxy="$HTTPS_PROXY" no_proxy="$NO_PROXY"
 
+# 代理仅在本 RUN 内临时生效，不写入镜像环境（ARG 值仅在构建期可用）
 RUN if [ -n "$HTTP_PROXY" ]; then \
         echo "Acquire::http::Proxy \"$HTTP_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
     fi; \
@@ -22,10 +21,12 @@ RUN if [ -n "$HTTP_PROXY" ]; then \
         echo "Acquire::https::Proxy \"$HTTPS_PROXY\";" >> /etc/apt/apt.conf.d/01proxy; \
     fi
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN export HTTP_PROXY="$HTTP_PROXY" HTTPS_PROXY="$HTTPS_PROXY" NO_PROXY="$NO_PROXY" \
+        http_proxy="$HTTP_PROXY" https_proxy="$HTTPS_PROXY" no_proxy="$NO_PROXY"; \
+    apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates gcc g++ libc6-dev pkg-config git \
     gcc-mingw-w64-x86-64 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/01proxy
 
 # ── Go toolchain (from host-cached tarball) ──────────────────────
 ARG GO_VERSION=1.24.13
